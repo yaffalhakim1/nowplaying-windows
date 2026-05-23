@@ -188,6 +188,18 @@ public class TaskbarOverlayForm : Form
         Invalidate();
     }
 
+    protected override void OnMouseClick(MouseEventArgs e)
+    {
+        base.OnMouseClick(e);
+        if (e.Button == MouseButtons.Right)
+        {
+            var result = MessageBox.Show("Exit Now On Taskbar?", "Now On Taskbar",
+                MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+            if (result == DialogResult.Yes)
+                Application.Exit();
+        }
+    }
+
     protected override void OnPaint(PaintEventArgs e)
     {
         var g = e.Graphics;
