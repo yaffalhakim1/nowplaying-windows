@@ -20,21 +20,27 @@ Show what's playing from YouTube, Spotify, or any media app — directly on your
 
 ## Prerequisites
 
-- Windows 10 version 1809+ or Windows 11
-- [.NET 9 Runtime](https://dotnet.microsoft.com/download/dotnet/9.0)
+- Windows 10 (1809+) or Windows 11
+- [.NET 9 Runtime](https://dotnet.microsoft.com/download/dotnet/9.0) — click "Download .NET Runtime 9.x", run the installer (one-time, 2 minutes)
 
 ## Quick Start
 
-### Download & Run
+### 🖥️ Download & Run (1 minute)
+
+1. Download **NowOnTaskbar-v1.0.zip** from [Releases](../../releases)
+2. Extract `NowOnTaskbar.exe` anywhere
+3. Double-click `NowOnTaskbar.exe` — icon appears in system tray
+4. Play a YouTube video or Spotify song → title appears on your taskbar
+
+**Only 1 file. No install. No config. No browser extension.**
+
+### ⌨️ Or Build from Source
 
 ```powershell
-# Build from source
-git clone https://github.com/YOUR_USERNAME/NowOnTaskbar.git
-cd NowOnTaskbar
+git clone https://github.com/yaffalhakim1/nowplaying-windows.git
+cd nowplaying-windows
 dotnet build -c Release
 .\bin\Release\net9.0-windows10.0.19041.0\NowOnTaskbar.exe
-
-# Or grab a release binary
 ```
 
 ### Usage
