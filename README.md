@@ -27,9 +27,8 @@ Show what's playing from YouTube, Spotify, or any media app — directly on your
 
 ### 🖥️ Download & Run (1 minute)
 
-1. Download **NowOnTaskbar-v1.0.zip** from [Releases](../../releases)
-2. Extract `NowOnTaskbar.exe` anywhere
-3. Double-click `NowOnTaskbar.exe` — icon appears in system tray
+1. Download **NowOnTaskbar.exe** from [Releases](../../releases)
+2. Run it anywhere — no install needed
 4. Play a YouTube video or Spotify song → title appears on your taskbar
 
 **Only 1 file. No install. No config. No browser extension.**
