@@ -12,9 +12,6 @@ public class TaskbarOverlayForm : Form
     private const int _preferredWidth = 160;
     private const int _barHeight = 40;
     private const int _gapFromNeighbor = 8;
-    private const int _classNameBufferSize = 256;
-    private const int _systemWindowMaxWidth = 500;
-    private const int _minVisibleWindowWidth = 30;
     private const int _scrollSpeed = 2;
     private const int _scrollIntervalMs = 50;
     private const int _zBumpIntervalMs = 100;
@@ -24,7 +21,6 @@ public class TaskbarOverlayForm : Form
         "Start", "TrayNotifyWnd", "TrayDummySearchControl",
         "ReBarWindow32", "MSTaskSwWClass", "MSTaskListWClass"
     };
-    private static readonly string _windowsUiPrefix = "Windows.UI.";
 
     private IntPtr _taskbarHwnd;
     private readonly System.Windows.Forms.Timer _scrollTimer = new();
@@ -105,50 +101,54 @@ public class TaskbarOverlayForm : Form
 
         Height = _barHeight;
 
-        int rightmostLeft = FindRightmostNeighbor(tr);
-        int x = rightmostLeft - Width - _gapFromNeighbor;
+        int x = FindLeftOfTrayArea(tr);
         int yCenter = tr.top + (tr.H - _barHeight) / 2;
 
         Location = new Point(tr.left + x, yCenter);
         SetWindowPos(Handle, IntPtr.Zero, 0, 0, 0, 0, SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE);
     }
 
-    private int FindRightmostNeighbor(RECT taskbarRect)
+    private int FindLeftOfTrayArea(RECT taskbarRect)
     {
-        int rightmostEdge = 0;
-        int leftOfRightmost = taskbarRect.W;
-        var clsSb = new StringBuilder(_classNameBufferSize);
+        var startHwnd = FindWindowEx(_taskbarHwnd, IntPtr.Zero, "Start", null);
+        if (startHwnd != IntPtr.Zero)
+        {
+            GetWindowRect(startHwnd, out var startRect);
+            int startLeft = startRect.left - taskbarRect.left;
+            if (startLeft > taskbarRect.W * 0.2)
+                return _gapFromNeighbor; // centered → far left edge
+        }
+
+        // left-aligned → right of rightmost non-system child
+        return RightOfRightmostChild(taskbarRect);
+    }
+
+    private int RightOfRightmostChild(RECT taskbarRect)
+    {
+        var clsSb = new StringBuilder(256);
         var child = IntPtr.Zero;
+        int rightmostRight = 0;
+        int leftOfRightmost = taskbarRect.W;
 
         while ((child = FindWindowEx(_taskbarHwnd, child, null, null)) != IntPtr.Zero)
         {
             GetWindowRect(child, out var cr);
-            int len = GetClassName(child, clsSb, _classNameBufferSize);
+            int len = GetClassName(child, clsSb, 256);
             string cls = len > 0 ? clsSb.ToString(0, len) : "";
-
             int w = cr.W;
             int childRight = cr.right - taskbarRect.left;
 
-            if (!IsSystemWindow(cls, w) && childRight > rightmostEdge)
+            if (!IsSystemWindow(cls, w) && childRight > rightmostRight)
             {
-                rightmostEdge = childRight;
+                rightmostRight = childRight;
                 leftOfRightmost = cr.left - taskbarRect.left;
             }
         }
 
-        return rightmostEdge > 0 ? leftOfRightmost : FindFallbackPosition(taskbarRect);
-    }
+        if (rightmostRight > 0)
+            return leftOfRightmost - Width - _gapFromNeighbor;
 
-    private static bool IsSystemWindow(string className, int width)
-    {
-        if (className.StartsWith(_windowsUiPrefix)) return true;
-        foreach (var c in _systemClasses)
-            if (className == c) return true;
-        return width < _minVisibleWindowWidth || width > _systemWindowMaxWidth;
-    }
-
-    private int FindFallbackPosition(RECT taskbarRect)
-    {
+        // fallback: left of tray
         var trayHwnd = FindWindowEx(_taskbarHwnd, IntPtr.Zero, "TrayNotifyWnd", null);
         if (trayHwnd != IntPtr.Zero)
         {
@@ -158,22 +158,38 @@ public class TaskbarOverlayForm : Form
         return taskbarRect.W - Width - 120;
     }
 
+    private static bool IsSystemWindow(string className, int width)
+    {
+        if (className.StartsWith("Windows.UI.")) return true;
+        foreach (var c in _systemClasses)
+            if (className == c) return true;
+        return width < 30 || width > 500;
+    }
+
     public void SetTitle(string title)
     {
         if (IsDisposed) return;
         _title = title;
 
+        if (_idle)
+        {
+            _scrollOffset = 0;
+            _scrollTimer.Stop();
+            Invalidate();
+            return;
+        }
+
         try
         {
             using var g = CreateGraphics();
-            _textWidth = TextRenderer.MeasureText(g, _idle ? "♫  Waiting..." : $"♫  {title}", _font).Width;
+            _textWidth = TextRenderer.MeasureText(g, $"♫  {title}", _font).Width;
         }
         catch
         {
             _textWidth = title.Length * 12;
         }
 
-        if (!_idle && _textWidth > Width - 10)
+        if (_textWidth > Width - 10)
         {
             _scrollOffset = Width;
             _scrollTimer.Start();
@@ -205,11 +221,7 @@ public class TaskbarOverlayForm : Form
         var g = e.Graphics;
         g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.SingleBitPerPixelGridFit;
 
-        if (_idle)
-        {
-            DrawText(g, "♫  Waiting...", Color.FromArgb(180, 200, 200, 200));
-            return;
-        }
+        if (_idle) return;
 
         var display = $"♫  {_title}";
         if (_textWidth <= Width)
