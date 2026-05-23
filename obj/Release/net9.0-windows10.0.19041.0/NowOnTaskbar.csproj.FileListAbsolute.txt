@@ -1,0 +1,17 @@
+C:\Users\yafit\Documents\Learn\NowOnTaskbar\obj\Release\net9.0-windows10.0.19041.0\NowOnTaskbar.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\yafit\Documents\Learn\NowOnTaskbar\obj\Release\net9.0-windows10.0.19041.0\NowOnTaskbar.AssemblyInfoInputs.cache
+C:\Users\yafit\Documents\Learn\NowOnTaskbar\obj\Release\net9.0-windows10.0.19041.0\NowOnTaskbar.AssemblyInfo.cs
+C:\Users\yafit\Documents\Learn\NowOnTaskbar\obj\Release\net9.0-windows10.0.19041.0\NowOnTaskbar.csproj.CoreCompileInputs.cache
+C:\Users\yafit\Documents\Learn\NowOnTaskbar\bin\Release\net9.0-windows10.0.19041.0\NowOnTaskbar.exe
+C:\Users\yafit\Documents\Learn\NowOnTaskbar\bin\Release\net9.0-windows10.0.19041.0\NowOnTaskbar.deps.json
+C:\Users\yafit\Documents\Learn\NowOnTaskbar\bin\Release\net9.0-windows10.0.19041.0\NowOnTaskbar.runtimeconfig.json
+C:\Users\yafit\Documents\Learn\NowOnTaskbar\bin\Release\net9.0-windows10.0.19041.0\NowOnTaskbar.dll
+C:\Users\yafit\Documents\Learn\NowOnTaskbar\bin\Release\net9.0-windows10.0.19041.0\NowOnTaskbar.pdb
+C:\Users\yafit\Documents\Learn\NowOnTaskbar\bin\Release\net9.0-windows10.0.19041.0\Microsoft.Windows.SDK.NET.dll
+C:\Users\yafit\Documents\Learn\NowOnTaskbar\bin\Release\net9.0-windows10.0.19041.0\WinRT.Runtime.dll
+C:\Users\yafit\Documents\Learn\NowOnTaskbar\obj\Release\net9.0-windows10.0.19041.0\NowOnTas.C878D4F9.Up2Date
+C:\Users\yafit\Documents\Learn\NowOnTaskbar\obj\Release\net9.0-windows10.0.19041.0\NowOnTaskbar.dll
+C:\Users\yafit\Documents\Learn\NowOnTaskbar\obj\Release\net9.0-windows10.0.19041.0\refint\NowOnTaskbar.dll
+C:\Users\yafit\Documents\Learn\NowOnTaskbar\obj\Release\net9.0-windows10.0.19041.0\NowOnTaskbar.pdb
+C:\Users\yafit\Documents\Learn\NowOnTaskbar\obj\Release\net9.0-windows10.0.19041.0\NowOnTaskbar.genruntimeconfig.cache
+C:\Users\yafit\Documents\Learn\NowOnTaskbar\obj\Release\net9.0-windows10.0.19041.0\ref\NowOnTaskbar.dll

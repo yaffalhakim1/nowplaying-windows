@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "dgSpecHash": "dvnqMm7lQJQ=",
+  "success": true,
+  "projectFilePath": "C:\\Users\\yafit\\Documents\\Learn\\NowOnTaskbar\\NowOnTaskbar.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\yafit\\.nuget\\packages\\microsoft.windows.sdk.net.ref\\10.0.19041.57\\microsoft.windows.sdk.net.ref.10.0.19041.57.nupkg.sha512"
+  ],
+  "logs": []
+}
