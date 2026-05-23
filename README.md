@@ -14,7 +14,7 @@ Show what's playing from YouTube, Spotify, or any media app — directly on your
 - 🧩 **Plays nice with TrafficMonitor** — auto-positions beside any existing taskbar app
 - 🔄 **Auto-scroll** — long titles scroll smoothly
 - 🔁 **Auto-start** — enables via tray menu, runs at login
-- 🪶 **Tiny** — \~150KB, <2MB RAM
+- 🪶 **Single file** — ~25MB exe, no install
 
 > **First of its kind.** No other modern tool shows "now playing" text directly on the Windows taskbar surface. macOS has it built-in. Linux has KDE panel widgets. Windows had nothing — until now.
 
