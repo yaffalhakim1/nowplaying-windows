@@ -21,7 +21,7 @@ Show what's playing from YouTube, Spotify, or any media app — directly on your
 ## Prerequisites
 
 - Windows 10 (1809+) or Windows 11
-- [.NET 9 Runtime](https://dotnet.microsoft.com/download/dotnet/9.0) — click "Download .NET Runtime 9.x", run the installer (one-time, 2 minutes)
+**👉 Must install [.NET 9 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/9.0)** — click "Download x64" under Run desktop apps section. The regular .NET Runtime will NOT work.
 
 ## Quick Start
 
