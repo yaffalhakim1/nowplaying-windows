@@ -3,9 +3,7 @@
 Show what's playing from YouTube, Spotify, or any media app — directly on your Windows taskbar. Text floats on the taskbar surface with no background, no browser extension, no config.
 
 <p align="center">
-  <img src="screenshot.png" alt="Now playing text on Windows taskbar" width="600">
-  <br>
-  <i>Add your screenshot here</i>
+  <img src="screenshot/example.png" alt="Now playing text on Windows taskbar" width="600">
 </p>
 
 ## Features
