@@ -130,6 +130,7 @@ NowOnTaskbar/
 ## Acknowledgments
 
 - Inspired by [TrafficMonitor](https://github.com/zhongyang219/TrafficMonitor) — the OG taskbar info display
+- Thanks to [@nadialvy](https://github.com/nadialvy) for inspiration and support
 - Uses Windows built-in media + notification APIs — no reverse engineering required
 
 ## License
