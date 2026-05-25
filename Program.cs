@@ -1,6 +1,8 @@
 using System.Runtime.InteropServices;
 using Windows.Media.Control;
 using Windows.System;
+using Windows.UI.Notifications;
+using Windows.UI.Notifications.Management;
 
 namespace NowOnTaskbar;
 
@@ -21,6 +23,10 @@ public class AppContext : ApplicationContext
     private readonly NotifyIcon _trayIcon;
     private GlobalSystemMediaTransportControlsSessionManager? _mediaManager;
     private GlobalSystemMediaTransportControlsSession? _currentSession;
+    private UserNotificationListener? _notifListener;
+    private readonly HashSet<uint> _seenNotifIds = new();
+    private bool _notificationsEnabled = true;
+    private ToolStripMenuItem _notifMenuItem = default!;
 
     public AppContext()
     {
@@ -35,6 +41,9 @@ public class AppContext : ApplicationContext
         {
             ToggleAutoStart();
         });
+        _notifMenuItem = new ToolStripMenuItem("Notifications") { Checked = true };
+        _notifMenuItem.Click += (_, _) => ToggleNotifications();
+        _trayIcon.ContextMenuStrip.Items.Add(_notifMenuItem);
         _trayIcon.ContextMenuStrip.Items.Add(new ToolStripSeparator());
         _trayIcon.ContextMenuStrip.Items.Add("Exit", null, (_, _) =>
         {
@@ -46,6 +55,7 @@ public class AppContext : ApplicationContext
         _overlay.Show();
 
         InitMedia();
+        _overlay.BeginInvoke(InitNotifications);
     }
 
     private void InitMedia()
@@ -71,6 +81,60 @@ public class AppContext : ApplicationContext
                 }
                 catch { }
             });
+        }
+        catch { }
+    }
+
+    private async void InitNotifications()
+    {
+        try
+        {
+            _notifListener = UserNotificationListener.Current;
+            var access = await _notifListener.RequestAccessAsync();
+            if (access != UserNotificationListenerAccessStatus.Allowed) return;
+
+            var existing = await _notifListener.GetNotificationsAsync(NotificationKinds.Toast);
+            foreach (var n in existing)
+                _seenNotifIds.Add(n.Id);
+
+            _notifListener.NotificationChanged += OnNotificationChanged;
+        }
+        catch { }
+    }
+
+    private void OnNotificationChanged(UserNotificationListener sender, UserNotificationChangedEventArgs args)
+    {
+        try
+        {
+            if (args.ChangeKind != UserNotificationChangedKind.Added) return;
+            if (!_notificationsEnabled) return;
+
+            var notif = sender.GetNotification(args.UserNotificationId);
+            if (notif == null || !_seenNotifIds.Add(notif.Id)) return;
+
+            var visual = notif.Notification.Visual;
+            var binding = visual.GetBinding("ToastGeneric");
+            if (binding == null) return;
+
+            var texts = binding.GetTextElements()
+                .Select(t => t.Text.Trim())
+                .Where(t => !string.IsNullOrEmpty(t))
+                .ToList();
+
+            if (texts.Count == 0) return;
+
+            // texts[0] = app/browser name, texts[1] = sender, texts[2] = message
+            // Show last 2 elements as "sender: message", or just single text
+            string senderName = texts.Count >= 3 ? texts[1] : (texts.Count >= 2 ? texts[0] : "");
+            string message = texts.Count >= 3 ? texts[2] : (texts.Count >= 2 ? texts[1] : texts[0]);
+
+            if (_overlay.IsDisposed) return;
+            if (_overlay.InvokeRequired)
+            {
+                _overlay.BeginInvoke(() => _overlay.ShowNotification(senderName, message));
+                return;
+            }
+            _overlay.ShowNotification(senderName, message);
         }
         catch { }
     }
@@ -121,6 +185,15 @@ public class AppContext : ApplicationContext
             return;
         }
         _overlay.SetTitle(title);
+    }
+
+    private void ToggleNotifications()
+    {
+        _notificationsEnabled = !_notificationsEnabled;
+        _notifMenuItem.Checked = _notificationsEnabled;
+        _trayIcon.ShowBalloonTip(1500, "Now On Taskbar",
+            _notificationsEnabled ? "Notifications enabled" : "Notifications silenced",
+            ToolTipIcon.Info);
     }
 
     private void ToggleAutoStart()

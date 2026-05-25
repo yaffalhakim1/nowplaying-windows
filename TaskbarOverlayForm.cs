@@ -16,6 +16,20 @@ public class TaskbarOverlayForm : Form
     private const int _scrollIntervalMs = 50;
     private const int _zBumpIntervalMs = 100;
 
+    private enum NotifState { Media, NotifIn, NotifHold, NotifOut }
+    private NotifState _notifState = NotifState.Media;
+    private string _notifSender = "";
+    private string _notifMessage = "";
+    private int _notifTextWidth;
+    private int _mediaY;
+    private int _notifY;
+    private System.Diagnostics.Stopwatch _animSw = new();
+    private bool _wasScrolling;
+    private const int _animDurationMs = 250;
+    private const int _notifHoldMs = 5000;
+    private System.Threading.Timer? _animThreadTimer;
+    private readonly System.Windows.Forms.Timer _notifHoldTimer = new();
+
     private static readonly string[] _systemClasses =
     {
         "Start", "TrayNotifyWnd", "TrayDummySearchControl",
@@ -25,7 +39,7 @@ public class TaskbarOverlayForm : Form
     private IntPtr _taskbarHwnd;
     private readonly System.Windows.Forms.Timer _scrollTimer = new();
     private readonly System.Windows.Forms.Timer _reposTimer = new();
-    private readonly Font _font = new("Segoe UI", 11, FontStyle.Regular);
+    private readonly Font _font = new("Segoe UI", 9, FontStyle.Regular);
 
     [DllImport("user32.dll")]
     private static extern IntPtr FindWindow(string lpClassName, string? lpWindowName);
@@ -63,6 +77,17 @@ public class TaskbarOverlayForm : Form
 
         _reposTimer.Interval = _zBumpIntervalMs;
         _reposTimer.Tick += (_, _) => Reposition();
+
+        _animThreadTimer = new System.Threading.Timer(AnimTimerCallback, null, Timeout.Infinite, Timeout.Infinite);
+
+        _notifHoldTimer.Interval = _notifHoldMs;
+        _notifHoldTimer.Tick += (_, _) =>
+        {
+            _notifHoldTimer.Stop();
+            _animSw.Restart();
+            _notifState = NotifState.NotifOut;
+            _animThreadTimer?.Change(0, 8);
+        };
     }
 
     protected override CreateParams CreateParams
@@ -95,9 +120,12 @@ public class TaskbarOverlayForm : Form
         GetWindowRect(_taskbarHwnd, out var tr);
         int maxW = Math.Min(tr.W / 3, 280);
 
-        Width = _idle
-            ? Math.Min(_preferredWidth, maxW)
-            : Math.Min(Math.Max(_textWidth + 30, 80), maxW);
+        if (_notifState != NotifState.Media)
+            Width = Math.Max(Width, Math.Min(_notifTextWidth + 40, maxW));
+        else if (_idle)
+            Width = Math.Min(_preferredWidth, maxW);
+        else
+            Width = Math.Min(Math.Max(_textWidth + 30, 80), maxW);
 
         Height = _barHeight;
 
@@ -204,6 +232,77 @@ public class TaskbarOverlayForm : Form
         Invalidate();
     }
 
+    public void ShowNotification(string sender, string message)
+    {
+        if (IsDisposed) return;
+        _notifSender = sender;
+        _notifMessage = message;
+
+        var display = $"✉  {(string.IsNullOrEmpty(sender) ? "" : $"{sender}: ")}{message}";
+        _notifTextWidth = TextRenderer.MeasureText(display, _font).Width;
+
+        var screen = Screen.PrimaryScreen;
+        var maxW = screen != null ? Math.Min(_notifTextWidth + 40, screen.WorkingArea.Width / 2) : _notifTextWidth + 40;
+        if (_notifTextWidth + 20 > Width)
+            Width = Math.Max(Width, Math.Min(_notifTextWidth + 40, maxW));
+
+        // Pause scroll during animation
+        _wasScrolling = _scrollTimer.Enabled;
+        _scrollTimer.Stop();
+
+        _animSw.Restart();
+        _mediaY = 0;
+        _notifY = 40;
+        _notifState = NotifState.NotifIn;
+        Reposition();
+        _animThreadTimer?.Change(0, 8);
+    }
+
+    private void AnimTick()
+    {
+        float dt = (float)_animSw.Elapsed.TotalMilliseconds;
+        float t = Math.Min(dt / _animDurationMs, 1f);
+        float eT = 1f - (1f - t) * (1f - t) * (1f - t);
+
+        switch (_notifState)
+        {
+            case NotifState.NotifIn:
+                _mediaY = (int)Math.Round(-40 * eT);
+                _notifY = (int)Math.Round(40 * (1f - eT));
+                if (t >= 1f)
+                {
+                    _animThreadTimer?.Change(Timeout.Infinite, Timeout.Infinite);
+                    _mediaY = -40;
+                    _notifY = 0;
+                    _notifState = NotifState.NotifHold;
+                    _notifHoldTimer.Start();
+                }
+                break;
+
+            case NotifState.NotifOut:
+                _mediaY = (int)Math.Round(-40 * (1f - eT));
+                _notifY = (int)Math.Round(40 * eT);
+                if (t >= 1f)
+                {
+                    _animThreadTimer?.Change(Timeout.Infinite, Timeout.Infinite);
+                    _mediaY = 0;
+                    _notifY = 40;
+                    _notifState = NotifState.Media;
+                    if (_wasScrolling && !_idle)
+                        _scrollTimer.Start();
+                }
+                break;
+        }
+
+        Invalidate();
+    }
+
+    private void AnimTimerCallback(object? state)
+    {
+        if (IsDisposed || !IsHandleCreated) return;
+        BeginInvoke(AnimTick);
+    }
+
     protected override void OnMouseClick(MouseEventArgs e)
     {
         base.OnMouseClick(e);
@@ -219,15 +318,39 @@ public class TaskbarOverlayForm : Form
     protected override void OnPaint(PaintEventArgs e)
     {
         var g = e.Graphics;
-        g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.SingleBitPerPixelGridFit;
+        g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
 
-        if (_idle) return;
+        if (_notifState != NotifState.Media)
+        {
+            if (!_idle)
+                DrawMediaText(g, _mediaY);
+            DrawNotifText(g, _notifY);
+        }
+        else if (!_idle)
+        {
+            DrawMediaText(g, 0);
+        }
+    }
 
+    private void DrawMediaText(Graphics g, int yOffset)
+    {
         var display = $"♫  {_title}";
         if (_textWidth <= Width)
-            DrawTextCentered(g, display, Color.FromArgb(240, 255, 255, 255));
+            TextRenderer.DrawText(g, display, _font, new Rectangle(0, yOffset, Width, Height),
+                Color.FromArgb(240, 255, 255, 255), Color.Transparent,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
         else
-            DrawScrollingText(g, display);
+            DrawScrollingTextAt(g, display, yOffset);
+    }
+
+    private void DrawNotifText(Graphics g, int yOffset)
+    {
+        var display = string.IsNullOrEmpty(_notifSender)
+            ? $"✉  {_notifMessage}"
+            : $"✉  {_notifSender}: {_notifMessage}";
+        TextRenderer.DrawText(g, display, _font, new Rectangle(0, yOffset, Width, Height),
+            Color.FromArgb(255, 180, 220, 255), Color.Transparent,
+            TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix | TextFormatFlags.EndEllipsis);
     }
 
     private void DrawText(Graphics g, string text, Color color)
@@ -245,10 +368,15 @@ public class TaskbarOverlayForm : Form
 
     private void DrawScrollingText(Graphics g, string text)
     {
+        DrawScrollingTextAt(g, text, 0);
+    }
+
+    private void DrawScrollingTextAt(Graphics g, string text, int yOffset)
+    {
         var color = Color.FromArgb(240, 255, 255, 255);
-        TextRenderer.DrawText(g, text, _font, new Rectangle(_scrollOffset, 0, _textWidth + 60, Height), color, Color.Transparent,
+        TextRenderer.DrawText(g, text, _font, new Rectangle(_scrollOffset, yOffset, _textWidth + 60, Height), color, Color.Transparent,
             TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
-        TextRenderer.DrawText(g, text, _font, new Rectangle(_scrollOffset + _textWidth + 60, 0, _textWidth + 60, Height), color, Color.Transparent,
+        TextRenderer.DrawText(g, text, _font, new Rectangle(_scrollOffset + _textWidth + 60, yOffset, _textWidth + 60, Height), color, Color.Transparent,
             TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
 
         if (_scrollOffset + _textWidth + 60 < 0)
@@ -267,6 +395,8 @@ public class TaskbarOverlayForm : Form
             _font.Dispose();
             _scrollTimer.Dispose();
             _reposTimer.Dispose();
+            _animThreadTimer?.Dispose();
+            _notifHoldTimer.Dispose();
         }
         base.Dispose(disposing);
     }

@@ -7,3 +7,6 @@ NowOnTaskbar-v1.0/
 *.suo
 .vs/
 *.DotSettings
+*.cer
+*.pfx
+*.msix
