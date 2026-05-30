@@ -173,3 +173,32 @@ dotnet publish -c Release -o publish-single /p:PublishSingleFile=true --no-self-
 - **UserNotificationListener** — requires package identity (sparse MSIX), not available to unpackaged apps
 - **Self-signed cert trust** — must be installed to Machine\TrustedPeople (admin required, one-time)
 - **System.Threading.Timer** for animation — safe via `BeginInvoke`, avoid touching UI state from callback
+
+## COM Broker Health & Recovery
+
+WinRT objects (`GlobalSystemMediaTransportControlsSessionManager`, `UserNotificationListener`) talk to out-of-process COM brokers. When the broker dies (sleep, lock, random disconnection), events silently stop firing — no exception, no notification. The app stays alive in the tray but becomes a zombie.
+
+### Recovery Triggers
+
+| Trigger | Recovery |
+|---------|----------|
+| `PowerModeChanged.Resume` | Force-reinit both media + notif |
+| `SessionSwitch.SessionUnlock` | Force-reinit both media + notif |
+| `SessionsChanged` event | Clear title if current session disappeared |
+| 2min health timer | Lightweight check → reinit only if dead |
+
+### Health Check Logic
+
+- **Media**: enqueue `GetSessions()` on dispatcher thread → if throws, the manager is dead → `InitMedia()`
+- **Notifications**: call `GetAccessStatus()` synchronously → if throws or `!= Allowed` → `InitNotifications()`
+- If healthy, no log, no action — avoids the noise of the old 2min blind-reinit
+
+### Rollback
+
+```powershell
+git checkout healthy-2min-timer   # revert to pre-recovery state
+```
+
+### Logging
+
+`%AppData%\NowOnTaskbar\log.txt` — only logs reinit events (not healthy ticks). Check for repeated "dead" entries as a sign of persistent broker failure.

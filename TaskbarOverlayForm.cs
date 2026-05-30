@@ -23,6 +23,7 @@ public class TaskbarOverlayForm : Form
     private int _notifTextWidth;
     private int _mediaY;
     private int _notifY;
+    private readonly Queue<(string sender, string message)> _notifQueue = new();
     private System.Diagnostics.Stopwatch _animSw = new();
     private bool _wasScrolling;
     private const int _animDurationMs = 250;
@@ -37,6 +38,7 @@ public class TaskbarOverlayForm : Form
     };
 
     private IntPtr _taskbarHwnd;
+    private bool _fullScreen;
     private readonly System.Windows.Forms.Timer _scrollTimer = new();
     private readonly System.Windows.Forms.Timer _reposTimer = new();
     private readonly Font _font = new("Segoe UI", 9, FontStyle.Regular);
@@ -44,8 +46,11 @@ public class TaskbarOverlayForm : Form
     [DllImport("user32.dll")]
     private static extern IntPtr FindWindow(string lpClassName, string? lpWindowName);
 
-    [DllImport("user32.dll", CharSet = CharSet.Auto)]
+    [DllImport("user32.dll")]
     private static extern IntPtr FindWindowEx(IntPtr parent, IntPtr childAfter, string? lpClassName, string? lpWindowName);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetForegroundWindow();
 
     [DllImport("user32.dll")]
     private static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
@@ -76,7 +81,7 @@ public class TaskbarOverlayForm : Form
         _scrollTimer.Tick += (_, _) => { _scrollOffset -= _scrollSpeed; Invalidate(); };
 
         _reposTimer.Interval = _zBumpIntervalMs;
-        _reposTimer.Tick += (_, _) => Reposition();
+        _reposTimer.Tick += (_, _) => RepositionWithFullscreenCheck();
 
         _animThreadTimer = new System.Threading.Timer(AnimTimerCallback, null, Timeout.Infinite, Timeout.Infinite);
 
@@ -106,6 +111,37 @@ public class TaskbarOverlayForm : Form
         _taskbarHwnd = FindWindow("Shell_TrayWnd", null);
         _reposTimer.Start();
         Reposition();
+    }
+
+    private void RepositionWithFullscreenCheck()
+    {
+        var fg = GetForegroundWindow();
+        bool wasFull = _fullScreen;
+        _fullScreen = fg != Handle && fg != IntPtr.Zero && IsFullScreenApp(fg);
+
+        if (_fullScreen)
+        {
+            if (!wasFull) Visible = false;
+            return;
+        }
+
+        if (wasFull)
+        {
+            Visible = !_idle;
+            if (!_idle) Reposition();
+        }
+        else
+        {
+            Reposition();
+        }
+    }
+
+    private static bool IsFullScreenApp(IntPtr hWnd)
+    {
+        GetWindowRect(hWnd, out var r);
+        var screen = Screen.FromHandle(hWnd);
+        var b = screen.Bounds;
+        return r.left <= b.Left && r.top <= b.Top && r.right >= b.Right && r.bottom >= b.Bottom;
     }
 
     private void Reposition()
@@ -139,16 +175,52 @@ public class TaskbarOverlayForm : Form
     private int FindLeftOfTrayArea(RECT taskbarRect)
     {
         var startHwnd = FindWindowEx(_taskbarHwnd, IntPtr.Zero, "Start", null);
-        if (startHwnd != IntPtr.Zero)
+        bool isCentered = startHwnd != IntPtr.Zero;
+        if (isCentered)
         {
             GetWindowRect(startHwnd, out var startRect);
-            int startLeft = startRect.left - taskbarRect.left;
-            if (startLeft > taskbarRect.W * 0.2)
-                return _gapFromNeighbor; // centered → far left edge
+            isCentered = startRect.left - taskbarRect.left > taskbarRect.W * 0.2;
         }
 
-        // left-aligned → right of rightmost non-system child
-        return RightOfRightmostChild(taskbarRect);
+        if (!isCentered)
+            return RightOfRightmostChild(taskbarRect);
+
+        // centered taskbar → try right side first, fallback to left
+        var trayHwnd = FindWindowEx(_taskbarHwnd, IntPtr.Zero, "TrayNotifyWnd", null);
+        if (trayHwnd != IntPtr.Zero)
+        {
+            GetWindowRect(trayHwnd, out var trayRect);
+            int candidateX = trayRect.left - taskbarRect.left - Width;
+
+            if (!HasChildInZone(trayRect.left - taskbarRect.left, candidateX))
+                return candidateX;
+        }
+
+        return _gapFromNeighbor; // fallback → far left
+    }
+
+    private bool HasChildInZone(int zoneRight, int zoneLeft)
+    {
+        var clsSb = new StringBuilder(256);
+        var child = IntPtr.Zero;
+        GetWindowRect(_taskbarHwnd, out var tr);
+
+        while ((child = FindWindowEx(_taskbarHwnd, child, null, null)) != IntPtr.Zero)
+        {
+            int len = GetClassName(child, clsSb, 256);
+            string cls = len > 0 ? clsSb.ToString(0, len) : "";
+            if (IsSystemWindow(cls, 0)) continue;
+
+            GetWindowRect(child, out var cr);
+
+            int childRight = cr.right - tr.left;
+            int childLeft = cr.left - tr.left;
+
+            if (childRight > zoneLeft && childLeft < zoneRight)
+                return true;
+        }
+
+        return false;
     }
 
     private int RightOfRightmostChild(RECT taskbarRect)
@@ -235,6 +307,18 @@ public class TaskbarOverlayForm : Form
     public void ShowNotification(string sender, string message)
     {
         if (IsDisposed) return;
+
+        if (_notifState != NotifState.Media)
+        {
+            _notifQueue.Enqueue((sender, message));
+            return;
+        }
+
+        StartNotification(sender, message);
+    }
+
+    private void StartNotification(string sender, string message)
+    {
         _notifSender = sender;
         _notifMessage = message;
 
@@ -246,9 +330,11 @@ public class TaskbarOverlayForm : Form
         if (_notifTextWidth + 20 > Width)
             Width = Math.Max(Width, Math.Min(_notifTextWidth + 40, maxW));
 
-        // Pause scroll during animation
-        _wasScrolling = _scrollTimer.Enabled;
-        _scrollTimer.Stop();
+        if (_notifState == NotifState.Media)
+        {
+            _wasScrolling = _scrollTimer.Enabled;
+            _scrollTimer.Stop();
+        }
 
         _animSw.Restart();
         _mediaY = 0;
@@ -285,6 +371,12 @@ public class TaskbarOverlayForm : Form
                 if (t >= 1f)
                 {
                     _animThreadTimer?.Change(Timeout.Infinite, Timeout.Infinite);
+                    if (_notifQueue.Count > 0)
+                    {
+                        var next = _notifQueue.Dequeue();
+                        StartNotification(next.sender, next.message);
+                        return;
+                    }
                     _mediaY = 0;
                     _notifY = 40;
                     _notifState = NotifState.Media;
