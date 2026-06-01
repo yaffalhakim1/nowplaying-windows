@@ -1,0 +1,33 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 9
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Publish single-file
+        run: dotnet publish -c Release -o publish-single /p:PublishSingleFile=true --no-self-contained
+
+      - name: Create release
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          gh release create $tag `
+            --repo "${{ github.repository }}" `
+            --title "$tag" `
+            --generate-notes `
+            "publish-single\NowOnTaskbar.exe"
+        env:
+          GH_TOKEN: ${{ github.token }}
