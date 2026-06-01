@@ -1,6 +1,10 @@
-# register-sparse.ps1
+﻿# register-sparse.ps1
 # One-time setup: grants package identity so NowOnTaskbar can read notifications.
 # Run from the project root (folder containing Package.appxmanifest).
+#
+# NOTE: If you get a parser error about a missing string terminator, check
+# that your copy has regular ASCII double-quotes (") not smart/curly quotes.
+# Download the RAW file from GitHub, do not copy-paste from the browser.
 
 $ErrorActionPreference = "Stop"
 
@@ -98,4 +102,4 @@ Write-Host ""
 Write-Host "✓ Package identity registered." -ForegroundColor Green
 Write-Host "  Start NowOnTaskbar, then send a test notification." -ForegroundColor Cyan
 Write-Host "  On first run, Windows will ask: 'Let NowOnTaskbar read your notifications?'" -ForegroundColor Cyan
-Write-Host "  Uninstall: Get-AppxPackage -Name NowOnTaskbar | Remove-AppxPackage" -ForegroundColor DarkGray
+Write-Host '  Uninstall: Get-AppxPackage -Name NowOnTaskbar | Remove-AppxPackage' -ForegroundColor DarkGray

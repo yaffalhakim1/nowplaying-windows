@@ -142,6 +142,12 @@ public class TaskbarOverlayForm : Form
 
     private static bool IsFullScreenApp(IntPtr hWnd)
     {
+        var clsSb = new StringBuilder(256);
+        int len = GetClassName(hWnd, clsSb, 256);
+        string cls = len > 0 ? clsSb.ToString(0, len) : "";
+        if (cls == "Progman" || cls == "WorkerW")
+            return false;
+
         GetWindowRect(hWnd, out var r);
         var screen = Screen.FromHandle(hWnd);
         var b = screen.Bounds;

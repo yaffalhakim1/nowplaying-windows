@@ -8,10 +8,10 @@ public class OverlayConfig
     public float FontSize { get; set; } = 9f;
     public int FontStyle { get; set; } = 0;
     public int MediaTextColorArgb { get; set; } = unchecked((int)0xF0FFFFFF);
-    public int MediaTextAlpha { get; set; } = 240;
+    public int MediaTextAlpha { get; set; } = 255;
     public int NotifTextColorArgb { get; set; } = unchecked((int)0xFFB4DCFF);
     public int NotifTextAlpha { get; set; } = 255;
-    public bool ShowBackground { get; set; } = false;
+    public bool ShowBackground { get; set; } = true;
     public int BackgroundColorArgb { get; set; } = unchecked((int)0xB41A1A2E);
     public int BackgroundAlpha { get; set; } = 180;
     public bool NotificationsEnabled { get; set; } = true;

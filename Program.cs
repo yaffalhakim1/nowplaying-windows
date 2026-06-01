@@ -190,7 +190,7 @@ public class AppContext : ApplicationContext
             Log($"InitNotifications: EXCEPTION {ex.GetType().Name}: {ex.Message}");
             ShowNotifError(ex is OperationCanceledException
                 ? "Listener timed out (5s). COM object likely dead."
-                : $"Error: {ex.Message}");
+                : $"Error: {(!string.IsNullOrEmpty(ex.Message) ? ex.Message : $"Unknown ({ex.GetType().Name})")}");
         }
         finally
         {
