@@ -41,7 +41,11 @@ public class TaskbarOverlayForm : Form
     private bool _fullScreen;
     private readonly System.Windows.Forms.Timer _scrollTimer = new();
     private readonly System.Windows.Forms.Timer _reposTimer = new();
-    private readonly Font _font = new("Segoe UI", 9, FontStyle.Regular);
+    private Font _font = new("Segoe UI", 9, FontStyle.Regular);
+    private Color _mediaTextColor = Color.FromArgb(240, 255, 255, 255);
+    private Color _notifTextColor = Color.FromArgb(255, 180, 220, 255);
+    private bool _showBackground;
+    private Color _bgColor = Color.FromArgb(180, 26, 26, 46);
 
     [DllImport("user32.dll")]
     private static extern IntPtr FindWindow(string lpClassName, string? lpWindowName);
@@ -176,16 +180,18 @@ public class TaskbarOverlayForm : Form
     {
         var startHwnd = FindWindowEx(_taskbarHwnd, IntPtr.Zero, "Start", null);
         bool isCentered = startHwnd != IntPtr.Zero;
+        int startLeft = 0;
         if (isCentered)
         {
             GetWindowRect(startHwnd, out var startRect);
-            isCentered = startRect.left - taskbarRect.left > taskbarRect.W * 0.2;
+            startLeft = startRect.left - taskbarRect.left;
+            isCentered = startLeft > taskbarRect.W * 0.2;
         }
 
         if (!isCentered)
             return RightOfRightmostChild(taskbarRect);
 
-        // centered taskbar → try right side first, fallback to left
+        // centered taskbar → try right side first, fallback to left of Start
         var trayHwnd = FindWindowEx(_taskbarHwnd, IntPtr.Zero, "TrayNotifyWnd", null);
         if (trayHwnd != IntPtr.Zero)
         {
@@ -196,7 +202,8 @@ public class TaskbarOverlayForm : Form
                 return candidateX;
         }
 
-        return _gapFromNeighbor; // fallback → far left
+        // fallback → left of Start button (avoids widgets button)
+        return Math.Max(startLeft - Width - _gapFromNeighbor, _gapFromNeighbor);
     }
 
     private bool HasChildInZone(int zoneRight, int zoneLeft)
@@ -300,6 +307,39 @@ public class TaskbarOverlayForm : Form
             _scrollTimer.Stop();
         }
 
+        Reposition();
+        Invalidate();
+    }
+
+    public void ApplyConfig(OverlayConfig config)
+    {
+        _font.Dispose();
+        _font = new Font(config.FontFamily, config.FontSize, (FontStyle)config.FontStyle);
+        _mediaTextColor = Color.FromArgb(config.MediaTextAlpha, Color.FromArgb(config.MediaTextColorArgb));
+        _notifTextColor = Color.FromArgb(config.NotifTextAlpha, Color.FromArgb(config.NotifTextColorArgb));
+        _showBackground = config.ShowBackground;
+        _bgColor = Color.FromArgb(config.BackgroundAlpha, Color.FromArgb(config.BackgroundColorArgb));
+
+        if (!_idle)
+        {
+            try
+            {
+                using var g = CreateGraphics();
+                _textWidth = TextRenderer.MeasureText(g, $"♫  {_title}", _font).Width;
+            }
+            catch { _textWidth = _title.Length * 12; }
+
+            if (_textWidth > Width - 10)
+            {
+                _scrollOffset = Width;
+                _scrollTimer.Start();
+            }
+            else
+            {
+                _scrollOffset = 0;
+                _scrollTimer.Stop();
+            }
+        }
         Reposition();
         Invalidate();
     }
@@ -412,6 +452,12 @@ public class TaskbarOverlayForm : Form
         var g = e.Graphics;
         g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
 
+        if (_showBackground)
+        {
+            using var bgBrush = new SolidBrush(_bgColor);
+            g.FillRectangle(bgBrush, ClientRectangle);
+        }
+
         if (_notifState != NotifState.Media)
         {
             if (!_idle)
@@ -429,7 +475,7 @@ public class TaskbarOverlayForm : Form
         var display = $"♫  {_title}";
         if (_textWidth <= Width)
             TextRenderer.DrawText(g, display, _font, new Rectangle(0, yOffset, Width, Height),
-                Color.FromArgb(240, 255, 255, 255), Color.Transparent,
+                _mediaTextColor, Color.Transparent,
                 TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
         else
             DrawScrollingTextAt(g, display, yOffset);
@@ -441,7 +487,7 @@ public class TaskbarOverlayForm : Form
             ? $"✉  {_notifMessage}"
             : $"✉  {_notifSender}: {_notifMessage}";
         TextRenderer.DrawText(g, display, _font, new Rectangle(0, yOffset, Width, Height),
-            Color.FromArgb(255, 180, 220, 255), Color.Transparent,
+            _notifTextColor, Color.Transparent,
             TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix | TextFormatFlags.EndEllipsis);
     }
 
@@ -465,10 +511,9 @@ public class TaskbarOverlayForm : Form
 
     private void DrawScrollingTextAt(Graphics g, string text, int yOffset)
     {
-        var color = Color.FromArgb(240, 255, 255, 255);
-        TextRenderer.DrawText(g, text, _font, new Rectangle(_scrollOffset, yOffset, _textWidth + 60, Height), color, Color.Transparent,
+        TextRenderer.DrawText(g, text, _font, new Rectangle(_scrollOffset, yOffset, _textWidth + 60, Height), _mediaTextColor, Color.Transparent,
             TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
-        TextRenderer.DrawText(g, text, _font, new Rectangle(_scrollOffset + _textWidth + 60, yOffset, _textWidth + 60, Height), color, Color.Transparent,
+        TextRenderer.DrawText(g, text, _font, new Rectangle(_scrollOffset + _textWidth + 60, yOffset, _textWidth + 60, Height), _mediaTextColor, Color.Transparent,
             TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
 
         if (_scrollOffset + _textWidth + 60 < 0)

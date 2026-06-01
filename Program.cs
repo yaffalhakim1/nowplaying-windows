@@ -22,6 +22,7 @@ public class AppContext : ApplicationContext
 {
     private TaskbarOverlayForm _overlay = default!;
     private readonly NotifyIcon _trayIcon;
+    private readonly OverlayConfig _config;
     private GlobalSystemMediaTransportControlsSessionManager? _mediaManager;
     private GlobalSystemMediaTransportControlsSession? _currentSession;
     private DispatcherQueueController? _mediaDispatcher;
@@ -49,6 +50,9 @@ public class AppContext : ApplicationContext
 
     public AppContext()
     {
+        _config = OverlayConfig.Load();
+        _notificationsEnabled = _config.NotificationsEnabled;
+
         _trayIcon = new NotifyIcon
         {
             Icon = SystemIcons.Application,
@@ -56,11 +60,12 @@ public class AppContext : ApplicationContext
             Visible = true,
             ContextMenuStrip = new ContextMenuStrip()
         };
+        _trayIcon.ContextMenuStrip.Items.Add("Settings", null, (_, _) => OpenSettings());
         _trayIcon.ContextMenuStrip.Items.Add("Auto-start", null, (_, _) =>
         {
             ToggleAutoStart();
         });
-        _notifMenuItem = new ToolStripMenuItem("Notifications") { Checked = true };
+        _notifMenuItem = new ToolStripMenuItem("Notifications") { Checked = _notificationsEnabled };
         _notifMenuItem.Click += (_, _) => ToggleNotifications();
         _trayIcon.ContextMenuStrip.Items.Add(_notifMenuItem);
         _trayIcon.ContextMenuStrip.Items.Add(new ToolStripSeparator());
@@ -71,6 +76,7 @@ public class AppContext : ApplicationContext
         });
 
         _overlay = new TaskbarOverlayForm();
+        _overlay.ApplyConfig(_config);
         _overlay.Show();
 
         InitMedia();
@@ -390,6 +396,18 @@ public class AppContext : ApplicationContext
         _overlay.SetTitle(title);
     }
 
+    private void OpenSettings()
+    {
+        using var form = new SettingsForm(_config);
+        if (form.ShowDialog() == DialogResult.OK)
+        {
+            form.ApplyToConfig();
+            _config.NotificationsEnabled = _notificationsEnabled;
+            _config.Save();
+            _overlay.ApplyConfig(_config);
+        }
+    }
+
     private void ToggleNotifications()
     {
         _notificationsEnabled = !_notificationsEnabled;
@@ -462,6 +480,8 @@ public class AppContext : ApplicationContext
                 });
             }
 
+            _config.NotificationsEnabled = _notificationsEnabled;
+            _config.Save();
             _overlay?.Dispose();
             _trayIcon?.Dispose();
         }
