@@ -78,6 +78,7 @@ public class TaskbarOverlayForm : Form
         TopMost = true;
         TransparencyKey = Color.Black;
         BackColor = Color.Black;
+        DoubleBuffered = true;
         Width = 200;
         Height = _barHeight;
 

@@ -7,8 +7,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <ApplicationManifest>NowOnTaskbar.manifest</ApplicationManifest>
-    <Version>1.4.0</Version>
-    <FileVersion>1.4.0.0</FileVersion>
+    <Version>1.4.2</Version>
+    <FileVersion>1.4.2.0</FileVersion>
     <Company>NowOnTaskbar</Company>
     <Description>Show now-playing text on the Windows taskbar</Description>
   </PropertyGroup>

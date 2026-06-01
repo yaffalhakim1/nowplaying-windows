@@ -1,6 +1,11 @@
 # Changelog
 
-## [1.4.0] - 2026-06-01
+## [1.4.2] - 2026-06-01
+
+### Fixed
+- Scroll flicker — enabled DoubleBuffered to eliminate black background flash
+
+## [1.4.1] - 2026-06-01
 
 ### Fixed
 - MSIX build error (error 80080204) — added `unvirtualizedResources` capability
