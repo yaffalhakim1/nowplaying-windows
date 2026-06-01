@@ -14,6 +14,7 @@ public class OverlayConfig
     public bool ShowBackground { get; set; } = true;
     public int BackgroundColorArgb { get; set; } = unchecked((int)0xB41A1A2E);
     public int BackgroundAlpha { get; set; } = 180;
+    public int TransparencyKeyArgb { get; set; } = unchecked((int)0xFF000000);
     public bool NotificationsEnabled { get; set; } = true;
 
     private static readonly JsonSerializerOptions _jsonOptions = new() { WriteIndented = true };

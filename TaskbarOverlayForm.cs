@@ -325,6 +325,7 @@ public class TaskbarOverlayForm : Form
         _notifTextColor = Color.FromArgb(config.NotifTextAlpha, Color.FromArgb(config.NotifTextColorArgb));
         _showBackground = config.ShowBackground;
         _bgColor = Color.FromArgb(config.BackgroundAlpha, Color.FromArgb(config.BackgroundColorArgb));
+        TransparencyKey = Color.FromArgb(config.TransparencyKeyArgb);
 
         if (!_idle)
         {

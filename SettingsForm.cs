@@ -7,7 +7,9 @@ public class SettingsForm : Form
     private Color _mediaTextColor;
     private Color _notifTextColor;
     private Color _bgColor;
+    private Color _chromaKeyColor;
     private Label _fontLabel = new();
+    private Label _chromaKeyLabel = new();
     private Label _mediaColorLabel = new();
     private Label _notifColorLabel = new();
     private Label _bgColorLabel = new();
@@ -27,13 +29,14 @@ public class SettingsForm : Form
         _mediaTextColor = Color.FromArgb(config.MediaTextAlpha, Color.FromArgb(config.MediaTextColorArgb));
         _notifTextColor = Color.FromArgb(config.NotifTextAlpha, Color.FromArgb(config.NotifTextColorArgb));
         _bgColor = Color.FromArgb(config.BackgroundAlpha, Color.FromArgb(config.BackgroundColorArgb));
+        _chromaKeyColor = Color.FromArgb(config.TransparencyKeyArgb);
 
         Text = "NowOnTaskbar Settings";
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
         MinimizeBox = false;
         StartPosition = FormStartPosition.CenterScreen;
-        ClientSize = new Size(420, 520);
+        ClientSize = new Size(440, 560);
         BackColor = SystemColors.Control;
 
         var y = 16;
@@ -128,6 +131,22 @@ public class SettingsForm : Form
         Controls.Add(_bgAlphaLabel);
         y += 48;
 
+        var chromaKeyBtn = new Button { Text = "Key color...", Location = new Point(16, y), Size = new Size(80, 28) };
+        _chromaKeyLabel = new Label { Location = new Point(108, y + 4), Size = new Size(40, 20), BackColor = _chromaKeyColor, BorderStyle = BorderStyle.FixedSingle };
+        chromaKeyBtn.Click += (_, _) =>
+        {
+            using var dlg = new ColorDialog { Color = _chromaKeyColor, AllowFullOpen = true, FullOpen = true, AnyColor = true };
+            if (dlg.ShowDialog() == DialogResult.OK)
+            {
+                _chromaKeyColor = dlg.Color;
+                _chromaKeyLabel.BackColor = _chromaKeyColor;
+                _previewPanel.Invalidate();
+            }
+        };
+        Controls.Add(chromaKeyBtn);
+        Controls.Add(_chromaKeyLabel);
+        y += 48;
+
         var previewLabel = new Label { Text = "Preview", Location = new Point(16, y), AutoSize = true, Font = new Font("Segoe UI", 8, FontStyle.Bold) };
         Controls.Add(previewLabel);
         y += 24;
@@ -147,6 +166,7 @@ public class SettingsForm : Form
             _mediaTextColor = Color.FromArgb(defaults.MediaTextAlpha, Color.FromArgb(defaults.MediaTextColorArgb));
             _notifTextColor = Color.FromArgb(defaults.NotifTextAlpha, Color.FromArgb(defaults.NotifTextColorArgb));
             _bgColor = Color.FromArgb(defaults.BackgroundAlpha, Color.FromArgb(defaults.BackgroundColorArgb));
+            _chromaKeyColor = Color.FromArgb(defaults.TransparencyKeyArgb);
             _bgToggle.Checked = defaults.ShowBackground;
             _fontLabel.Text = $"{defaults.FontFamily} {defaults.FontSize}pt";
             _mediaColorLabel.BackColor = _mediaTextColor;
@@ -155,6 +175,8 @@ public class SettingsForm : Form
             _mediaAlphaSlider.Value = defaults.MediaTextAlpha;
             _notifAlphaSlider.Value = defaults.NotifTextAlpha;
             _bgAlphaSlider.Value = defaults.BackgroundAlpha;
+            _chromaKeyColor = Color.FromArgb(defaults.TransparencyKeyArgb);
+            _chromaKeyLabel.BackColor = _chromaKeyColor;
             _previewPanel.Invalidate();
         };
         Controls.Add(saveBtn);
@@ -200,6 +222,7 @@ public class SettingsForm : Form
         _config.ShowBackground = _bgToggle.Checked;
         _config.BackgroundColorArgb = Color.FromArgb(255, _bgColor).ToArgb();
         _config.BackgroundAlpha = _bgAlphaSlider.Value;
+        _config.TransparencyKeyArgb = Color.FromArgb(255, _chromaKeyColor).ToArgb();
     }
 
     protected override void Dispose(bool disposing)
