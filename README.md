@@ -90,6 +90,9 @@ NowOnTaskbar.csproj     .NET 9 WinForms + WinRT (net9.0-windows10.0.19041.0)
 Package.appxmanifest    Sparse package identity for notification access
 register-sparse.ps1     One-time notification setup script
 ```
+## For Developers
+
+Built entirely in C# WinForms — but if you come from JS/TS, see **[JS-DEVELOPER-GUIDE.md](JS-DEVELOPER-GUIDE.md)** for a crash course in how the code works.
 
 ## Tech stack
 
