@@ -2,7 +2,7 @@
 
 Show what's playing on your Windows taskbar. Works with Spotify, YouTube, Chrome, Edge, VLC — any app that uses Windows media controls.
 
-No browser extension. No background. No config. Just text on the taskbar.
+No browser extension. No background. Just text on the taskbar.
 
 <p align="center">
   <img src="screenshot/example.png" alt="Now playing text on Windows taskbar" width="600">
@@ -16,7 +16,8 @@ No browser extension. No background. No config. Just text on the taskbar.
 - **No browser extension** — uses built-in Windows APIs
 - **Centered taskbar** — detects Windows 11 centered layout, positions correctly
 - **Auto-scroll** — long titles scroll smoothly
-- **Right-click tray** — toggle notifications, enable auto-start, exit
+- **Customizable** — font, colors, opacity, chroma key via Settings dialog
+- **Right-click tray** — customize, toggle notifications, enable auto-start, exit
 
 ## Install
 
@@ -60,6 +61,7 @@ This creates a self-signed certificate and registers a sparse MSIX package. Wind
 | Use | Play anything — title appears on taskbar |
 | Silence notifications | Right-click tray icon, uncheck Notifications |
 | Auto-start | Right-click tray icon, click Auto-start |
+| Customize | Right-click tray icon, click Settings |
 | Exit | Right-click tray icon, click Exit |
 
 ## How it works
