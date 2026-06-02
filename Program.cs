@@ -186,11 +186,11 @@ public class AppContext : ApplicationContext
         }
         catch (Exception ex)
         {
-            _notifListener = null;
-            Log($"InitNotifications: EXCEPTION {ex.GetType().Name}: {ex.Message}");
+            var hresult = Marshal.GetHRForException(ex);
+            Log($"InitNotifications: EXCEPTION {ex.GetType().Name}: {ex.Message} (HRESULT=0x{hresult:X8})");
             ShowNotifError(ex is OperationCanceledException
                 ? "Listener timed out (5s). COM object likely dead."
-                : $"Error: {(!string.IsNullOrEmpty(ex.Message) ? ex.Message : $"Unknown ({ex.GetType().Name})")}");
+                : $"Error: {(!string.IsNullOrEmpty(ex.Message) ? ex.Message : $"Unknown (HRESULT=0x{hresult:X8})")}");
         }
         finally
         {
