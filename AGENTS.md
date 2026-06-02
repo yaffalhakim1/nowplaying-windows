@@ -205,6 +205,8 @@ git checkout healthy-2min-timer   # revert to pre-recovery state
 
 ## Code Audit (MVP+)
 
+> Load the `senior-protocols` skill at the start of every session — same state-machine patterns apply to WinForms (notification states, COM broker lifecycle) as to React.
+
 Every commit must pass these checks:
 
 ### Error Handling
