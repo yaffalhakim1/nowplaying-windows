@@ -1,4 +1,5 @@
 using Microsoft.Win32;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Windows.Media.Control;
 using Windows.System;
@@ -20,6 +21,9 @@ static class Program
 
 public class AppContext : ApplicationContext
 {
+    [DllImport("user32.dll")]
+    private static extern bool SetForegroundWindow(IntPtr hWnd);
+
     private TaskbarOverlayForm _overlay = default!;
     private readonly NotifyIcon _trayIcon;
     private readonly OverlayConfig _config;
@@ -77,6 +81,7 @@ public class AppContext : ApplicationContext
 
         _overlay = new TaskbarOverlayForm();
         _overlay.ApplyConfig(_config);
+        _overlay.LeftClicked += OnOverlayClicked;
         _overlay.Show();
 
         InitMedia();
@@ -109,13 +114,13 @@ public class AppContext : ApplicationContext
                 {
                     if (_currentSession != null)
                     {
-                        try { _currentSession.MediaPropertiesChanged -= OnMediaPropertiesChanged; } catch { }
+                        try { _currentSession.MediaPropertiesChanged -= OnMediaPropertiesChanged; } catch (Exception ex) { Log($"InitMedia: unsub MediaPropertiesChanged failed: {ex.Message}"); }
                         _currentSession = null;
                     }
                     if (_mediaManager != null)
                     {
-                        try { _mediaManager.SessionsChanged -= OnSessionsChanged; } catch { }
-                        try { _mediaManager.CurrentSessionChanged -= OnCurrentSessionChanged; } catch { }
+                        try { _mediaManager.SessionsChanged -= OnSessionsChanged; } catch (Exception ex) { Log($"InitMedia: unsub SessionsChanged failed: {ex.Message}"); }
+                        try { _mediaManager.CurrentSessionChanged -= OnCurrentSessionChanged; } catch (Exception ex) { Log($"InitMedia: unsub CurrentSessionChanged failed: {ex.Message}"); }
                         _mediaManager = null;
                     }
 
@@ -130,10 +135,10 @@ public class AppContext : ApplicationContext
                         await UpdateFromSession(_currentSession);
                     }
                 }
-                catch { }
+                catch (Exception ex) { Log($"InitMedia: inner dispatch failed: {ex.Message}"); }
             });
         }
-        catch { }
+        catch (Exception ex) { Log($"InitMedia: outer dispatch failed: {ex.Message}"); }
         finally
         {
             _mediaReinitializing = false;
@@ -150,7 +155,7 @@ public class AppContext : ApplicationContext
         {
             if (_notifListener != null)
             {
-                try { _notifListener.NotificationChanged -= OnNotificationChanged; } catch { }
+                try { _notifListener.NotificationChanged -= OnNotificationChanged; } catch (Exception ex) { Log($"InitNotifications: unsub failed: {ex.Message}"); }
                 _notifListener = null;
             }
 
@@ -202,15 +207,15 @@ public class AppContext : ApplicationContext
     private void ShowNotifError(string message)
     {
         try { _trayIcon.ShowBalloonTip(3000, "Notifications Failed", message, ToolTipIcon.Warning); }
-        catch { }
+        catch (Exception ex) { Log($"ShowNotifError failed: {ex.Message}"); }
     }
 
     private void OnPowerModeChanged(object sender, PowerModeChangedEventArgs e)
     {
         if (e.Mode == PowerModes.Resume)
         {
-            try { InitMedia(); } catch { }
-            try { if (!_overlay.IsDisposed) _overlay.BeginInvoke(new Action(InitNotifications)); } catch { }
+            try { InitMedia(); } catch (Exception ex) { Log($"OnPowerModeChanged InitMedia failed: {ex.Message}"); }
+            try { if (!_overlay.IsDisposed) _overlay.BeginInvoke(new Action(InitNotifications)); } catch (Exception ex) { Log($"OnPowerModeChanged InitNotifications failed: {ex.Message}"); }
         }
     }
 
@@ -218,10 +223,37 @@ public class AppContext : ApplicationContext
     {
         if (e.Reason == SessionSwitchReason.SessionUnlock)
         {
-            try { InitMedia(); } catch { }
-            try { if (!_overlay.IsDisposed) _overlay.BeginInvoke(new Action(InitNotifications)); } catch { }
+            try { InitMedia(); } catch (Exception ex) { Log($"OnSessionSwitch InitMedia failed: {ex.Message}"); }
+            try { if (!_overlay.IsDisposed) _overlay.BeginInvoke(new Action(InitNotifications)); } catch (Exception ex) { Log($"OnSessionSwitch InitNotifications failed: {ex.Message}"); }
         }
     }
+
+    private void OnOverlayClicked()
+    {
+        try
+        {
+            if (_currentSession == null) return;
+            var aumid = _currentSession.SourceAppUserModelId;
+            if (string.IsNullOrEmpty(aumid)) return;
+
+            var appName = aumid.Contains('!') ? aumid.Split('!')[1] : aumid;
+
+            Task.Run(() =>
+            {
+                try
+                {
+                    var hWnd = Process.GetProcessesByName(appName)
+                        .Select(p => p.MainWindowHandle)
+                        .FirstOrDefault(h => h != IntPtr.Zero);
+                    if (hWnd == IntPtr.Zero) return;
+                    _overlay.BeginInvoke(() => SetForegroundWindow(hWnd));
+                }
+                catch (Exception ex) { Log($"OnOverlayClicked: Task failed: {ex.Message}"); }
+            });
+        }
+        catch (Exception ex) { Log($"OnOverlayClicked failed: {ex.Message}"); }
+    }
+
 
     private void CheckHealthThenReinit()
     {
@@ -289,7 +321,7 @@ public class AppContext : ApplicationContext
             if (session == null)
                 UITitle("");
         }
-        catch { }
+        catch (Exception ex) { Log($"OnSessionsChanged: {ex.Message}"); }
     }
 
     private void OnNotificationChanged(UserNotificationListener sender, UserNotificationChangedEventArgs args)
@@ -341,7 +373,7 @@ public class AppContext : ApplicationContext
             }
             _overlay.ShowNotification(senderName, message);
         }
-        catch { }
+        catch (Exception ex) { Log($"OnNotificationChanged: {ex.Message}"); }
     }
 
     private async void OnCurrentSessionChanged(GlobalSystemMediaTransportControlsSessionManager sender, CurrentSessionChangedEventArgs args)
@@ -362,12 +394,12 @@ public class AppContext : ApplicationContext
                 UITitle("");
             }
         }
-        catch { }
+        catch (Exception ex) { Log($"OnCurrentSessionChanged: {ex.Message}"); }
     }
 
     private async void OnMediaPropertiesChanged(GlobalSystemMediaTransportControlsSession sender, MediaPropertiesChangedEventArgs args)
     {
-        try { await UpdateFromSession(sender); } catch { }
+        try { await UpdateFromSession(sender); } catch (Exception ex) { Log($"OnMediaPropertiesChanged: {ex.Message}"); }
     }
 
     private async Task UpdateFromSession(GlobalSystemMediaTransportControlsSession session)
@@ -382,7 +414,7 @@ public class AppContext : ApplicationContext
                 : title ?? "";
             UITitle(display);
         }
-        catch { }
+        catch (Exception ex) { Log($"UpdateFromSession: {ex.Message}"); }
     }
 
     private void UITitle(string title)
@@ -441,7 +473,7 @@ public class AppContext : ApplicationContext
                     "Auto-start enabled", ToolTipIcon.Info);
             }
         }
-        catch { }
+        catch (Exception ex) { Log($"ToggleAutoStart: {ex.Message}"); }
     }
 
     protected override void Dispose(bool disposing)
@@ -470,13 +502,13 @@ public class AppContext : ApplicationContext
                             oldManager.CurrentSessionChanged -= OnCurrentSessionChanged;
                         }
                     }
-                    catch { }
+                    catch (Exception ex) { Log($"Dispose: unsub failed: {ex.Message}"); }
 
                     try
                     {
                         await dispatcher.ShutdownQueueAsync();
                     }
-                    catch { }
+                    catch (Exception ex) { Log($"Dispose: shutdown failed: {ex.Message}"); }
                 });
             }
 

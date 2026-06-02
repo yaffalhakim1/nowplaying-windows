@@ -202,3 +202,24 @@ git checkout healthy-2min-timer   # revert to pre-recovery state
 ### Logging
 
 `%AppData%\NowOnTaskbar\log.txt` — only logs reinit events (not healthy ticks). Check for repeated "dead" entries as a sign of persistent broker failure.
+
+## Code Audit (MVP+)
+
+Every commit must pass these checks:
+
+### Error Handling
+- [ ] Zero empty `catch { }` blocks — every catch must log with operation context
+- [ ] No silent failure — if a COM operation fails, log the HRESULT or exception type
+- [ ] Balloon/UI errors include actionable info (not just "Error: Unknown")
+
+### Resilience
+- [ ] COM broker failure paths covered (health check recovers within 2min)
+- [ ] Cross-thread calls use `BeginInvoke` or `Invoke`
+- [ ] Reinit guards prevent cascading restarts
+
+### Cleanliness
+- [ ] No dead code, no commented-out blocks
+- [ ] No magic numbers without named constants
+- [ ] Version bumped in `.csproj` and `CHANGELOG.md` if releasing
+
+Run `Select-String -Path "*.cs" -Pattern "catch\s*\{\s*\}"` before pushing to find any new empty catches.

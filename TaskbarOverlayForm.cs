@@ -65,9 +65,19 @@ public class TaskbarOverlayForm : Form
     [DllImport("user32.dll", CharSet = CharSet.Auto)]
     private static extern int GetClassName(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount);
 
+    [DllImport("user32.dll")]
+    private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+    public event Action? LeftClicked;
+
     private const uint SWP_NOACTIVATE = 0x0010;
     private const uint SWP_NOMOVE = 0x0002;
     private const uint SWP_NOSIZE = 0x0001;
+    private const int WM_LBUTTONDOWN = 0x0201;
+    private const int WM_RBUTTONDOWN = 0x0204;
+    private const int WM_NCHITTEST = 0x0084;
+    private const int HTCLIENT = 1;
+    private const int HTTRANSPARENT = -1;
 
     private struct RECT { public int left, top, right, bottom; public int W => right - left; public int H => bottom - top; }
 
@@ -447,6 +457,39 @@ public class TaskbarOverlayForm : Form
     {
         base.OnMouseClick(e);
         if (e.Button == MouseButtons.Right)
+        {
+            var result = MessageBox.Show("Exit Now On Taskbar?", "Now On Taskbar",
+                MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+            if (result == DialogResult.Yes)
+                Application.Exit();
+        }
+        else
+        {
+            File.AppendAllText(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "NowOnTaskbar", "log.txt"),
+                $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] OnMouseClick: left click at ({e.X},{e.Y})\n");
+            LeftClicked?.Invoke();
+        }
+    }
+
+    protected override void WndProc(ref Message m)
+    {
+        if (m.Msg == WM_NCHITTEST)
+        {
+            base.WndProc(ref m);
+            if (m.Result == (IntPtr)HTTRANSPARENT)
+                m.Result = (IntPtr)HTCLIENT;
+            return;
+        }
+
+        if (m.Msg == WM_LBUTTONDOWN)
+        {
+            LeftClicked?.Invoke();
+            return;
+        }
+
+        base.WndProc(ref m);
+
+        if (m.Msg == WM_RBUTTONDOWN)
         {
             var result = MessageBox.Show("Exit Now On Taskbar?", "Now On Taskbar",
                 MessageBoxButtons.YesNo, MessageBoxIcon.Question);

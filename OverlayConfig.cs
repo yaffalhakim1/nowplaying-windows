@@ -25,6 +25,20 @@ public class OverlayConfig
     private static readonly string _settingsPath =
         Path.Combine(_settingsDir, "settings.json");
 
+    private static readonly string _logPath =
+        Path.Combine(_settingsDir, "log.txt");
+
+    private static void Log(string message)
+    {
+        try
+        {
+            if (!Directory.Exists(_settingsDir))
+                Directory.CreateDirectory(_settingsDir);
+            File.AppendAllText(_logPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] OverlayConfig: {message}\n");
+        }
+        catch { }
+    }
+
     public static OverlayConfig Load()
     {
         try
@@ -35,7 +49,10 @@ public class OverlayConfig
                 return JsonSerializer.Deserialize<OverlayConfig>(json, _jsonOptions) ?? new OverlayConfig();
             }
         }
-        catch { }
+        catch (Exception ex)
+        {
+            Log($"Load failed: {ex.GetType().Name}: {ex.Message}");
+        }
         return new OverlayConfig();
     }
 
@@ -48,6 +65,9 @@ public class OverlayConfig
             var json = JsonSerializer.Serialize(this, _jsonOptions);
             File.WriteAllText(_settingsPath, json);
         }
-        catch { }
+        catch (Exception ex)
+        {
+            Log($"Save failed: {ex.GetType().Name}: {ex.Message}");
+        }
     }
 }

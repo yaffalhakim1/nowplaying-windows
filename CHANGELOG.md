@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.5.0] - 2026-06-02
+
+### Added
+- Click overlay — brings media source app to foreground (Spotify, Chrome, etc.)
+
+## [1.4.3] - 2026-06-01
+
+### Fixed
+- COM HRESULT logging on notification event hook failure (issue #3)
+
 ## [1.4.2] - 2026-06-01
 
 ### Fixed
