@@ -342,7 +342,7 @@ public class TaskbarOverlayForm : Form
             _textWidth = (title.Length + artist.Length) * 12;
         }
 
-        if (_textWidth > Width - 10 - artOffset)
+        if (_textWidth > Width - 10 - artOffset && !_twoLineLayout)
         {
             _scrollOffset = Width - artOffset;
             _scrollTimer.Start();
@@ -581,20 +581,12 @@ public class TaskbarOverlayForm : Form
             var line1 = string.IsNullOrEmpty(_artist) ? "" : $"{icon}  {_artist}";
             var line2 = string.IsNullOrEmpty(_title) ? "" : $"{icon}  {_title}";
 
-            if (_textWidth <= Width - artOffset)
-            {
-                var rect1 = new Rectangle(artOffset, yOffset, Width - artOffset, Height / 2);
-                var rect2 = new Rectangle(artOffset, yOffset + Height / 2, Width - artOffset, Height / 2);
-                TextRenderer.DrawText(g, line1, _font, rect1, _mediaTextColor, Color.Transparent,
-                    TextFormatFlags.HorizontalCenter | TextFormatFlags.Bottom | TextFormatFlags.NoPrefix);
-                TextRenderer.DrawText(g, line2, _font, rect2, _mediaTextColor, Color.Transparent,
-                    TextFormatFlags.HorizontalCenter | TextFormatFlags.Top | TextFormatFlags.NoPrefix);
-            }
-            else
-            {
-                DrawScrollingTextAt(g, line1, yOffset, artOffset);
-                DrawScrollingTextAt(g, line2, yOffset + Height / 2, artOffset);
-            }
+            var rect1 = new Rectangle(artOffset, yOffset, Width - artOffset, Height / 2);
+            var rect2 = new Rectangle(artOffset, yOffset + Height / 2, Width - artOffset, Height / 2);
+            TextRenderer.DrawText(g, line1, _font, rect1, _mediaTextColor, Color.Transparent,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.Bottom | TextFormatFlags.NoPrefix);
+            TextRenderer.DrawText(g, line2, _font, rect2, _mediaTextColor, Color.Transparent,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.Top | TextFormatFlags.NoPrefix);
         }
         else
         {
