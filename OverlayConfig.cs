@@ -18,6 +18,7 @@ public class OverlayConfig
     public bool NotificationsEnabled { get; set; } = true;
     public bool ShowAlbumArt { get; set; } = true;
     public bool TwoLineLayout { get; set; } = false;
+    public bool HideArtist { get; set; } = false;
 
     private static readonly JsonSerializerOptions _jsonOptions = new() { WriteIndented = true };
 

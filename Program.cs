@@ -45,6 +45,7 @@ public class AppContext : ApplicationContext
     private ToolStripMenuItem _nextMenuItem = default!;
     private ToolStripMenuItem _albumArtMenuItem = default!;
     private ToolStripMenuItem _layoutMenuItem = default!;
+    private ToolStripMenuItem _hideArtistMenuItem = default!;
 
     private void HookSession(GlobalSystemMediaTransportControlsSession session)
     {
@@ -115,6 +116,9 @@ public class AppContext : ApplicationContext
         _layoutMenuItem = new ToolStripMenuItem("Two-line Layout") { Checked = _config.TwoLineLayout };
         _layoutMenuItem.Click += (_, _) => ToggleLayout();
         _trayIcon.ContextMenuStrip.Items.Add(_layoutMenuItem);
+        _hideArtistMenuItem = new ToolStripMenuItem("Hide Artist") { Checked = _config.HideArtist };
+        _hideArtistMenuItem.Click += (_, _) => ToggleHideArtist();
+        _trayIcon.ContextMenuStrip.Items.Add(_hideArtistMenuItem);
         _trayIcon.ContextMenuStrip.Items.Add(new ToolStripSeparator());
         _trayIcon.ContextMenuStrip.Items.Add("Exit", null, (_, _) =>
         {
@@ -635,6 +639,17 @@ public class AppContext : ApplicationContext
         _overlay.ApplyConfig(_config);
         _trayIcon.ShowBalloonTip(1500, "Now On Taskbar",
             _config.TwoLineLayout ? "Two-line layout" : "Single-line layout",
+            ToolTipIcon.Info);
+    }
+
+    private void ToggleHideArtist()
+    {
+        _config.HideArtist = !_config.HideArtist;
+        _hideArtistMenuItem.Checked = _config.HideArtist;
+        _config.Save();
+        _overlay.ApplyConfig(_config);
+        _trayIcon.ShowBalloonTip(1500, "Now On Taskbar",
+            _config.HideArtist ? "Artist hidden" : "Artist shown",
             ToolTipIcon.Info);
     }
 

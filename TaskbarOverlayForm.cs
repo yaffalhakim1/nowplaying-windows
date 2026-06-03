@@ -53,6 +53,7 @@ public class TaskbarOverlayForm : Form
     private bool _isPlaying;
     private bool _showAlbumArt = true;
     private bool _twoLineLayout;
+    private bool _hideArtist;
 
     public int AlbumArtSize => _albumArtSize;
 
@@ -327,13 +328,21 @@ public class TaskbarOverlayForm : Form
             using var g = CreateGraphics();
             if (_twoLineLayout)
             {
-                var w1 = TextRenderer.MeasureText(g, $"{(_isPlaying ? "▶" : "⏸")}  {artist}", _font).Width;
-                var w2 = TextRenderer.MeasureText(g, $"{(_isPlaying ? "▶" : "⏸")}  {title}", _font).Width;
-                _textWidth = Math.Max(w1, w2);
+                var icon = _isPlaying ? "▶" : "⏸";
+                var artistText = _hideArtist ? "" : _artist;
+                if (string.IsNullOrEmpty(artistText))
+                    _textWidth = TextRenderer.MeasureText(g, $"{icon}  {title}", _font).Width;
+                else
+                {
+                    var w1 = TextRenderer.MeasureText(g, $"{icon}  {artistText}", _font).Width;
+                    var w2 = TextRenderer.MeasureText(g, $"{icon}  {title}", _font).Width;
+                    _textWidth = Math.Max(w1, w2);
+                }
             }
             else
             {
-                var display = string.IsNullOrEmpty(artist) ? title : $"{artist} — {title}";
+                var artistText = _hideArtist ? "" : _artist;
+                var display = string.IsNullOrEmpty(artistText) ? title : $"{artistText} — {title}";
                 _textWidth = TextRenderer.MeasureText(g, $"♫  {display}", _font).Width;
             }
         }
@@ -384,6 +393,7 @@ public class TaskbarOverlayForm : Form
         TransparencyKey = Color.FromArgb(config.TransparencyKeyArgb);
         _showAlbumArt = config.ShowAlbumArt;
         _twoLineLayout = config.TwoLineLayout;
+        _hideArtist = config.HideArtist;
 
         if (!_idle)
             SetTitle(_title, _artist);
@@ -578,19 +588,30 @@ public class TaskbarOverlayForm : Form
         if (_twoLineLayout)
         {
             var icon = _isPlaying ? "▶" : "⏸";
-            var line1 = string.IsNullOrEmpty(_artist) ? "" : $"{icon}  {_artist}";
+            var artistText = _hideArtist ? "" : _artist;
+            var line1 = string.IsNullOrEmpty(artistText) ? "" : $"{icon}  {artistText}";
             var line2 = string.IsNullOrEmpty(_title) ? "" : $"{icon}  {_title}";
 
-            var rect1 = new Rectangle(artOffset, yOffset, Width - artOffset, Height / 2);
-            var rect2 = new Rectangle(artOffset, yOffset + Height / 2, Width - artOffset, Height / 2);
-            TextRenderer.DrawText(g, line1, _font, rect1, _mediaTextColor, Color.Transparent,
-                TextFormatFlags.HorizontalCenter | TextFormatFlags.Bottom | TextFormatFlags.NoPrefix);
-            TextRenderer.DrawText(g, line2, _font, rect2, _mediaTextColor, Color.Transparent,
-                TextFormatFlags.HorizontalCenter | TextFormatFlags.Top | TextFormatFlags.NoPrefix);
+            if (string.IsNullOrEmpty(artistText))
+            {
+                var rect = new Rectangle(artOffset, yOffset, Width - artOffset, Height);
+                TextRenderer.DrawText(g, line2, _font, rect, _mediaTextColor, Color.Transparent,
+                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
+            }
+            else
+            {
+                var rect1 = new Rectangle(artOffset, yOffset, Width - artOffset, Height / 2);
+                var rect2 = new Rectangle(artOffset, yOffset + Height / 2, Width - artOffset, Height / 2);
+                TextRenderer.DrawText(g, line1, _font, rect1, _mediaTextColor, Color.Transparent,
+                    TextFormatFlags.HorizontalCenter | TextFormatFlags.Bottom | TextFormatFlags.NoPrefix);
+                TextRenderer.DrawText(g, line2, _font, rect2, _mediaTextColor, Color.Transparent,
+                    TextFormatFlags.HorizontalCenter | TextFormatFlags.Top | TextFormatFlags.NoPrefix);
+            }
         }
         else
         {
-            var display = string.IsNullOrEmpty(_artist) ? _title : $"{_artist} — {_title}";
+            var artistText = _hideArtist ? "" : _artist;
+            var display = string.IsNullOrEmpty(artistText) ? _title : $"{artistText} — {_title}";
             if (_showAlbumArt && _albumArt != null)
             {
                 // album art replaces icon
