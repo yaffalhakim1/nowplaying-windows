@@ -1,6 +1,7 @@
 using Microsoft.Win32;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using Windows.Foundation;
 using Windows.Media.Control;
 using Windows.System;
 using Windows.UI.Notifications;
@@ -39,6 +40,9 @@ public class AppContext : ApplicationContext
     private readonly System.Windows.Forms.Timer _healthTimer;
     private readonly object _notifLock = new();
     private long _mediaUpdateSeq;
+    private ToolStripMenuItem _playPauseMenuItem = default!;
+    private ToolStripMenuItem _prevMenuItem = default!;
+    private ToolStripMenuItem _nextMenuItem = default!;
 
     private void HookSession(GlobalSystemMediaTransportControlsSession session)
     {
@@ -86,6 +90,16 @@ public class AppContext : ApplicationContext
             ContextMenuStrip = new ContextMenuStrip()
         };
         _trayIcon.ContextMenuStrip.Items.Add("Settings", null, (_, _) => OpenSettings());
+        _prevMenuItem = new ToolStripMenuItem("⏮ Previous") { Enabled = false };
+        _prevMenuItem.Click += (_, _) => TryMediaOp(s => s.TrySkipPreviousAsync());
+        _trayIcon.ContextMenuStrip.Items.Add(_prevMenuItem);
+        _playPauseMenuItem = new ToolStripMenuItem("▶ Play") { Enabled = false };
+        _playPauseMenuItem.Click += (_, _) => TryPlayPause();
+        _trayIcon.ContextMenuStrip.Items.Add(_playPauseMenuItem);
+        _nextMenuItem = new ToolStripMenuItem("⏭ Next") { Enabled = false };
+        _nextMenuItem.Click += (_, _) => TryMediaOp(s => s.TrySkipNextAsync());
+        _trayIcon.ContextMenuStrip.Items.Add(_nextMenuItem);
+        _trayIcon.ContextMenuStrip.Items.Add(new ToolStripSeparator());
         _trayIcon.ContextMenuStrip.Items.Add("Auto-start", null, (_, _) =>
         {
             ToggleAutoStart();
@@ -529,6 +543,51 @@ public class AppContext : ApplicationContext
             return;
         }
         _overlay.SetPlaybackState(isPlaying);
+        UpdatePlayPauseMenuItem(isPlaying);
+    }
+
+    private void UpdatePlayPauseMenuItem(bool isPlaying)
+    {
+        if (_trayIcon.ContextMenuStrip?.InvokeRequired == true)
+        {
+            try { _trayIcon.ContextMenuStrip.BeginInvoke(() => UpdatePlayPauseMenuItem(isPlaying)); }
+            catch (ObjectDisposedException) { }
+            catch (InvalidOperationException) { }
+            return;
+        }
+
+        var session = _currentSession;
+        _playPauseMenuItem.Text = isPlaying ? "⏸ Pause" : "▶ Play";
+        _playPauseMenuItem.Enabled = session != null;
+        _prevMenuItem.Enabled = session != null;
+        _nextMenuItem.Enabled = session != null;
+    }
+
+    private void TryPlayPause()
+    {
+        try
+        {
+            var session = _currentSession;
+            if (session == null) return;
+            var info = session.GetPlaybackInfo();
+            var playing = info?.PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing;
+            if (playing)
+                session.TryPauseAsync().AsTask().ContinueWith(t => Log($"TryPause failed: {t.Exception?.Message}"), TaskContinuationOptions.OnlyOnFaulted);
+            else
+                session.TryPlayAsync().AsTask().ContinueWith(t => Log($"TryPlay failed: {t.Exception?.Message}"), TaskContinuationOptions.OnlyOnFaulted);
+        }
+        catch (Exception ex) { Log($"TryPlayPause: {ex.Message}"); }
+    }
+
+    private void TryMediaOp(Func<GlobalSystemMediaTransportControlsSession, IAsyncOperation<bool>> op)
+    {
+        try
+        {
+            var session = _currentSession;
+            if (session == null) return;
+            op(session).AsTask().ContinueWith(t => Log($"TryMediaOp failed: {t.Exception?.Message}"), TaskContinuationOptions.OnlyOnFaulted);
+        }
+        catch (Exception ex) { Log($"TryMediaOp: {ex.Message}"); }
     }
 
     private void OpenSettings()

@@ -578,7 +578,7 @@ public class TaskbarOverlayForm : Form
         if (_albumArt != null)
         {
             int artY = yOffset + (Height - _albumArtSize) / 2;
-            g.DrawImage(_albumArt, 4, artY, _albumArtSize, _albumArtSize);
+            g.DrawImage(_albumArt, 0, artY, _albumArtSize, _albumArtSize);
             artOffset = _albumArtSize + _albumArtGap;
         }
 
