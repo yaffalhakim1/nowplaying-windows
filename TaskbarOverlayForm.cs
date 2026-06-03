@@ -50,6 +50,7 @@ public class TaskbarOverlayForm : Form
     private const int _albumArtSize = 20;
     private const int _albumArtGap = 6;
     private bool _isPlaying;
+    private bool _showAlbumArt = true;
 
     public int AlbumArtSize => _albumArtSize;
 
@@ -193,7 +194,7 @@ public class TaskbarOverlayForm : Form
             Width = Math.Min(_preferredWidth, maxW);
         else
         {
-            int artW = _albumArt != null ? _albumArtSize + _albumArtGap : 0;
+            int artW = (_showAlbumArt && _albumArt != null) ? _albumArtSize + _albumArtGap : 0;
             Width = Math.Min(Math.Max(_textWidth + 30 + artW, 80), maxW);
         }
 
@@ -316,13 +317,14 @@ public class TaskbarOverlayForm : Form
             return;
         }
 
-        int artOffset = _albumArt != null ? _albumArtSize + _albumArtGap : 0;
+        int artOffset = (_showAlbumArt && _albumArt != null) ? _albumArtSize + _albumArtGap : 0;
 
         try
         {
             using var g = CreateGraphics();
             var icon = _isPlaying ? "▶" : "⏸";
-            _textWidth = TextRenderer.MeasureText(g, $"{icon}  {title}", _font).Width;
+            var measureText = (_showAlbumArt && _albumArt != null) ? title : $"{icon}  {title}";
+            _textWidth = TextRenderer.MeasureText(g, measureText, _font).Width;
         }
         catch
         {
@@ -369,12 +371,13 @@ public class TaskbarOverlayForm : Form
         _showBackground = config.ShowBackground;
         _bgColor = Color.FromArgb(config.BackgroundAlpha, Color.FromArgb(config.BackgroundColorArgb));
         TransparencyKey = Color.FromArgb(config.TransparencyKeyArgb);
+        _showAlbumArt = config.ShowAlbumArt;
 
         if (!_idle)
         {
-            int artOffset = _albumArt != null ? _albumArtSize + _albumArtGap : 0;
+            int artOffset = (_showAlbumArt && _albumArt != null) ? _albumArtSize + _albumArtGap : 0;
             var icon = _isPlaying ? "▶" : "⏸";
-            var display = _albumArt != null ? _title : $"{icon}  {_title}";
+            var display = (_showAlbumArt && _albumArt != null) ? _title : $"{icon}  {_title}";
 
             try
             {
@@ -575,7 +578,7 @@ public class TaskbarOverlayForm : Form
     private void DrawMediaText(Graphics g, int yOffset)
     {
         int artOffset = 0;
-        if (_albumArt != null)
+        if (_showAlbumArt && _albumArt != null)
         {
             int artY = yOffset + (Height - _albumArtSize) / 2;
             g.DrawImage(_albumArt, 0, artY, _albumArtSize, _albumArtSize);
@@ -583,12 +586,13 @@ public class TaskbarOverlayForm : Form
         }
 
         var icon = _isPlaying ? "▶" : "⏸";
-        var display = _albumArt != null ? _title : $"{icon}  {_title}";
+        var display = (_showAlbumArt && _albumArt != null) ? _title : $"{icon}  {_title}";
 
         if (_textWidth <= Width - artOffset)
         {
             var rect = new Rectangle(artOffset, yOffset, Width - artOffset, Height);
-            var align = _albumArt != null
+            var hasArt = _showAlbumArt && _albumArt != null;
+            var align = hasArt
                 ? TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix
                 : TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix;
             TextRenderer.DrawText(g, display, _font, rect, _mediaTextColor, Color.Transparent, align);

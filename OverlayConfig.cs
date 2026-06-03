@@ -16,6 +16,7 @@ public class OverlayConfig
     public int BackgroundAlpha { get; set; } = 180;
     public int TransparencyKeyArgb { get; set; } = unchecked((int)0xFF000000);
     public bool NotificationsEnabled { get; set; } = true;
+    public bool ShowAlbumArt { get; set; } = true;
 
     private static readonly JsonSerializerOptions _jsonOptions = new() { WriteIndented = true };
 

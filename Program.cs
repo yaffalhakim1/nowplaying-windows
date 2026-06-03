@@ -43,6 +43,7 @@ public class AppContext : ApplicationContext
     private ToolStripMenuItem _playPauseMenuItem = default!;
     private ToolStripMenuItem _prevMenuItem = default!;
     private ToolStripMenuItem _nextMenuItem = default!;
+    private ToolStripMenuItem _albumArtMenuItem = default!;
 
     private void HookSession(GlobalSystemMediaTransportControlsSession session)
     {
@@ -107,6 +108,9 @@ public class AppContext : ApplicationContext
         _notifMenuItem = new ToolStripMenuItem("Notifications") { Checked = _notificationsEnabled };
         _notifMenuItem.Click += (_, _) => ToggleNotifications();
         _trayIcon.ContextMenuStrip.Items.Add(_notifMenuItem);
+        _albumArtMenuItem = new ToolStripMenuItem("Album Art") { Checked = _config.ShowAlbumArt };
+        _albumArtMenuItem.Click += (_, _) => ToggleAlbumArt();
+        _trayIcon.ContextMenuStrip.Items.Add(_albumArtMenuItem);
         _trayIcon.ContextMenuStrip.Items.Add(new ToolStripSeparator());
         _trayIcon.ContextMenuStrip.Items.Add("Exit", null, (_, _) =>
         {
@@ -608,6 +612,17 @@ public class AppContext : ApplicationContext
         _notifMenuItem.Checked = _notificationsEnabled;
         _trayIcon.ShowBalloonTip(1500, "Now On Taskbar",
             _notificationsEnabled ? "Notifications enabled" : "Notifications silenced",
+            ToolTipIcon.Info);
+    }
+
+    private void ToggleAlbumArt()
+    {
+        _config.ShowAlbumArt = !_config.ShowAlbumArt;
+        _albumArtMenuItem.Checked = _config.ShowAlbumArt;
+        _config.Save();
+        _overlay.ApplyConfig(_config);
+        _trayIcon.ShowBalloonTip(1500, "Now On Taskbar",
+            _config.ShowAlbumArt ? "Album art shown" : "Album art hidden",
             ToolTipIcon.Info);
     }
 
