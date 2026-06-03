@@ -46,6 +46,11 @@ public class TaskbarOverlayForm : Form
     private Color _notifTextColor = Color.FromArgb(255, 180, 220, 255);
     private bool _showBackground;
     private Color _bgColor = Color.FromArgb(180, 26, 26, 46);
+    private Bitmap? _albumArt;
+    private const int _albumArtSize = 20;
+    private const int _albumArtGap = 6;
+
+    public int AlbumArtSize => _albumArtSize;
 
     [DllImport("user32.dll")]
     private static extern IntPtr FindWindow(string lpClassName, string? lpWindowName);
@@ -93,20 +98,24 @@ public class TaskbarOverlayForm : Form
         Height = _barHeight;
 
         _scrollTimer.Interval = _scrollIntervalMs;
-        _scrollTimer.Tick += (_, _) => { _scrollOffset -= _scrollSpeed; Invalidate(); };
+        _scrollTimer.Tick += (_, _) => { try { _scrollOffset -= _scrollSpeed; Invalidate(); } catch (Exception ex) { Log($"ScrollTimer: {ex.Message}"); } };
 
         _reposTimer.Interval = _zBumpIntervalMs;
-        _reposTimer.Tick += (_, _) => RepositionWithFullscreenCheck();
+        _reposTimer.Tick += (_, _) => { try { RepositionWithFullscreenCheck(); } catch (Exception ex) { Log($"ReposTimer: {ex.Message}"); } };
 
         _animThreadTimer = new System.Threading.Timer(AnimTimerCallback, null, Timeout.Infinite, Timeout.Infinite);
 
         _notifHoldTimer.Interval = _notifHoldMs;
         _notifHoldTimer.Tick += (_, _) =>
         {
-            _notifHoldTimer.Stop();
-            _animSw.Restart();
-            _notifState = NotifState.NotifOut;
-            _animThreadTimer?.Change(0, 8);
+            try
+            {
+                _notifHoldTimer.Stop();
+                _animSw.Restart();
+                _notifState = NotifState.NotifOut;
+                _animThreadTimer?.Change(0, 8);
+            }
+            catch (Exception ex) { Log($"NotifHoldTimer: {ex.Message}"); }
         };
     }
 
@@ -182,7 +191,10 @@ public class TaskbarOverlayForm : Form
         else if (_idle)
             Width = Math.Min(_preferredWidth, maxW);
         else
-            Width = Math.Min(Math.Max(_textWidth + 30, 80), maxW);
+        {
+            int artW = _albumArt != null ? _albumArtSize + _albumArtGap : 0;
+            Width = Math.Min(Math.Max(_textWidth + 30 + artW, 80), maxW);
+        }
 
         Height = _barHeight;
 
@@ -303,6 +315,8 @@ public class TaskbarOverlayForm : Form
             return;
         }
 
+        int artOffset = _albumArt != null ? _albumArtSize + _albumArtGap : 0;
+
         try
         {
             using var g = CreateGraphics();
@@ -313,9 +327,9 @@ public class TaskbarOverlayForm : Form
             _textWidth = title.Length * 12;
         }
 
-        if (_textWidth > Width - 10)
+        if (_textWidth > Width - 10 - artOffset)
         {
-            _scrollOffset = Width;
+            _scrollOffset = Width - artOffset;
             _scrollTimer.Start();
         }
         else
@@ -326,6 +340,15 @@ public class TaskbarOverlayForm : Form
 
         Reposition();
         Invalidate();
+    }
+
+    public void SetAlbumArt(Bitmap? bitmap)
+    {
+        if (IsDisposed) return;
+        _albumArt?.Dispose();
+        _albumArt = bitmap;
+        if (!_idle) SetTitle(_title);
+        else Invalidate();
     }
 
     public void ApplyConfig(OverlayConfig config)
@@ -340,16 +363,19 @@ public class TaskbarOverlayForm : Form
 
         if (!_idle)
         {
+            int artOffset = _albumArt != null ? _albumArtSize + _albumArtGap : 0;
+            var display = _albumArt != null ? _title : $"♫  {_title}";
+
             try
             {
                 using var g = CreateGraphics();
-                _textWidth = TextRenderer.MeasureText(g, $"♫  {_title}", _font).Width;
+                _textWidth = TextRenderer.MeasureText(g, display, _font).Width;
             }
             catch { _textWidth = _title.Length * 12; }
 
-            if (_textWidth > Width - 10)
+            if (_textWidth > Width - 10 - artOffset)
             {
-                _scrollOffset = Width;
+                _scrollOffset = Width - artOffset;
                 _scrollTimer.Start();
             }
             else
@@ -450,7 +476,22 @@ public class TaskbarOverlayForm : Form
     private void AnimTimerCallback(object? state)
     {
         if (IsDisposed || !IsHandleCreated) return;
-        BeginInvoke(AnimTick);
+        try { BeginInvoke(AnimTick); }
+        catch (ObjectDisposedException) { }
+        catch (InvalidOperationException) { }
+        catch (Exception ex) { Log($"AnimTimerCallback: {ex.Message}"); }
+    }
+
+    private static void Log(string message)
+    {
+        try
+        {
+            var logPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "NowOnTaskbar", "log.txt");
+            var dir = Path.GetDirectoryName(logPath);
+            if (dir != null && !Directory.Exists(dir)) Directory.CreateDirectory(dir);
+            File.AppendAllText(logPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [Overlay] {message}\n");
+        }
+        catch { }
     }
 
     protected override void OnMouseClick(MouseEventArgs e)
@@ -523,13 +564,27 @@ public class TaskbarOverlayForm : Form
 
     private void DrawMediaText(Graphics g, int yOffset)
     {
-        var display = $"♫  {_title}";
-        if (_textWidth <= Width)
-            TextRenderer.DrawText(g, display, _font, new Rectangle(0, yOffset, Width, Height),
-                _mediaTextColor, Color.Transparent,
-                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
+        int artOffset = 0;
+        if (_albumArt != null)
+        {
+            int artY = yOffset + (Height - _albumArtSize) / 2;
+            g.DrawImage(_albumArt, 4, artY, _albumArtSize, _albumArtSize);
+            artOffset = _albumArtSize + _albumArtGap;
+        }
+
+        var display = _albumArt != null ? _title : $"♫  {_title}";
+        if (_textWidth <= Width - artOffset)
+        {
+            var rect = new Rectangle(artOffset, yOffset, Width - artOffset, Height);
+            var align = _albumArt != null
+                ? TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix
+                : TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix;
+            TextRenderer.DrawText(g, display, _font, rect, _mediaTextColor, Color.Transparent, align);
+        }
         else
-            DrawScrollingTextAt(g, display, yOffset);
+        {
+            DrawScrollingTextAt(g, display, yOffset, artOffset);
+        }
     }
 
     private void DrawNotifText(Graphics g, int yOffset)
@@ -557,14 +612,14 @@ public class TaskbarOverlayForm : Form
 
     private void DrawScrollingText(Graphics g, string text)
     {
-        DrawScrollingTextAt(g, text, 0);
+        DrawScrollingTextAt(g, text, 0, 0);
     }
 
-    private void DrawScrollingTextAt(Graphics g, string text, int yOffset)
+    private void DrawScrollingTextAt(Graphics g, string text, int yOffset, int xOffset = 0)
     {
-        TextRenderer.DrawText(g, text, _font, new Rectangle(_scrollOffset, yOffset, _textWidth + 60, Height), _mediaTextColor, Color.Transparent,
+        TextRenderer.DrawText(g, text, _font, new Rectangle(xOffset + _scrollOffset, yOffset, _textWidth + 60, Height), _mediaTextColor, Color.Transparent,
             TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
-        TextRenderer.DrawText(g, text, _font, new Rectangle(_scrollOffset + _textWidth + 60, yOffset, _textWidth + 60, Height), _mediaTextColor, Color.Transparent,
+        TextRenderer.DrawText(g, text, _font, new Rectangle(xOffset + _scrollOffset + _textWidth + 60, yOffset, _textWidth + 60, Height), _mediaTextColor, Color.Transparent,
             TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
 
         if (_scrollOffset + _textWidth + 60 < 0)
@@ -585,6 +640,7 @@ public class TaskbarOverlayForm : Form
             _reposTimer.Dispose();
             _animThreadTimer?.Dispose();
             _notifHoldTimer.Dispose();
+            _albumArt?.Dispose();
         }
         base.Dispose(disposing);
     }

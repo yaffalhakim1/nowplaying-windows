@@ -38,6 +38,19 @@ public class AppContext : ApplicationContext
     private bool _mediaReinitializing;
     private readonly System.Windows.Forms.Timer _healthTimer;
     private readonly object _notifLock = new();
+    private long _mediaUpdateSeq;
+
+    private void HookSession(GlobalSystemMediaTransportControlsSession session)
+    {
+        try { session.MediaPropertiesChanged += OnMediaPropertiesChanged; }
+        catch (Exception ex) { Log($"HookSession: {ex.Message}"); }
+    }
+
+    private void UnhookSession(GlobalSystemMediaTransportControlsSession session)
+    {
+        try { session.MediaPropertiesChanged -= OnMediaPropertiesChanged; }
+        catch (Exception ex) { Log($"UnhookSession: {ex.Message}"); }
+    }
     private readonly string _logPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "NowOnTaskbar", "log.txt");
 
     private void Log(string message)
@@ -91,20 +104,22 @@ public class AppContext : ApplicationContext
         SystemEvents.PowerModeChanged += OnPowerModeChanged;
         SystemEvents.SessionSwitch += OnSessionSwitch;
         _healthTimer = new System.Windows.Forms.Timer { Interval = 120_000 };
-        _healthTimer.Tick += (_, _) => CheckHealthThenReinit();
+        _healthTimer.Tick += (_, _) => { try { CheckHealthThenReinit(); } catch (Exception ex) { Log($"HealthTimer: {ex.Message}"); } };
         _healthTimer.Start();
     }
 
     private void InitMedia()
     {
-        if (_mediaReinitializing) return;
+        if (_mediaReinitializing) { Log("InitMedia: blocked by guard"); return; }
         _mediaReinitializing = true;
+        Log("InitMedia: enter");
 
         try
         {
             if (_mediaDispatcher == null)
             {
                 _mediaDispatcher = DispatcherQueueController.CreateOnDedicatedThread();
+                Log("InitMedia: created dispatcher");
             }
 
             var queue = _mediaDispatcher.DispatcherQueue;
@@ -114,7 +129,7 @@ public class AppContext : ApplicationContext
                 {
                     if (_currentSession != null)
                     {
-                        try { _currentSession.MediaPropertiesChanged -= OnMediaPropertiesChanged; } catch (Exception ex) { Log($"InitMedia: unsub MediaPropertiesChanged failed: {ex.Message}"); }
+                        UnhookSession(_currentSession);
                         _currentSession = null;
                     }
                     if (_mediaManager != null)
@@ -127,11 +142,13 @@ public class AppContext : ApplicationContext
                     _mediaManager = await GlobalSystemMediaTransportControlsSessionManager.RequestAsync();
                     _mediaManager.SessionsChanged += OnSessionsChanged;
                     _mediaManager.CurrentSessionChanged += OnCurrentSessionChanged;
+                    Log("InitMedia: got session manager");
 
                     _currentSession = _mediaManager.GetCurrentSession();
+                    Log($"InitMedia: current session = {(_currentSession != null ? _currentSession.SourceAppUserModelId : "null")}");
                     if (_currentSession != null)
                     {
-                        _currentSession.MediaPropertiesChanged += OnMediaPropertiesChanged;
+                        HookSession(_currentSession);
                         await UpdateFromSession(_currentSession);
                     }
                 }
@@ -215,7 +232,7 @@ public class AppContext : ApplicationContext
         if (e.Mode == PowerModes.Resume)
         {
             try { InitMedia(); } catch (Exception ex) { Log($"OnPowerModeChanged InitMedia failed: {ex.Message}"); }
-            try { if (!_overlay.IsDisposed) _overlay.BeginInvoke(new Action(InitNotifications)); } catch (Exception ex) { Log($"OnPowerModeChanged InitNotifications failed: {ex.Message}"); }
+            try { if (!_overlay.IsDisposed) _overlay.BeginInvoke(new Action(InitNotifications)); } catch (ObjectDisposedException) { } catch (InvalidOperationException) { } catch (Exception ex) { Log($"OnPowerModeChanged InitNotifications failed: {ex.Message}"); }
         }
     }
 
@@ -224,7 +241,7 @@ public class AppContext : ApplicationContext
         if (e.Reason == SessionSwitchReason.SessionUnlock)
         {
             try { InitMedia(); } catch (Exception ex) { Log($"OnSessionSwitch InitMedia failed: {ex.Message}"); }
-            try { if (!_overlay.IsDisposed) _overlay.BeginInvoke(new Action(InitNotifications)); } catch (Exception ex) { Log($"OnSessionSwitch InitNotifications failed: {ex.Message}"); }
+            try { if (!_overlay.IsDisposed) _overlay.BeginInvoke(new Action(InitNotifications)); } catch (ObjectDisposedException) { } catch (InvalidOperationException) { } catch (Exception ex) { Log($"OnSessionSwitch InitNotifications failed: {ex.Message}"); }
         }
     }
 
@@ -232,8 +249,9 @@ public class AppContext : ApplicationContext
     {
         try
         {
-            if (_currentSession == null) return;
-            var aumid = _currentSession.SourceAppUserModelId;
+            var session = _currentSession;
+            if (session == null) return;
+            var aumid = session.SourceAppUserModelId;
             if (string.IsNullOrEmpty(aumid)) return;
 
             var appName = aumid.Contains('!') ? aumid.Split('!')[1] : aumid;
@@ -242,11 +260,13 @@ public class AppContext : ApplicationContext
             {
                 try
                 {
-                    var hWnd = Process.GetProcessesByName(appName)
+                    var processes = Process.GetProcessesByName(appName);
+                    var hWnd = processes
                         .Select(p => p.MainWindowHandle)
                         .FirstOrDefault(h => h != IntPtr.Zero);
                     if (hWnd == IntPtr.Zero) return;
-                    _overlay.BeginInvoke(() => SetForegroundWindow(hWnd));
+                    if (!_overlay.IsDisposed)
+                        _overlay.BeginInvoke(() => SetForegroundWindow(hWnd));
                 }
                 catch (Exception ex) { Log($"OnOverlayClicked: Task failed: {ex.Message}"); }
             });
@@ -368,7 +388,9 @@ public class AppContext : ApplicationContext
             if (_overlay.IsDisposed) return;
             if (_overlay.InvokeRequired)
             {
-                _overlay.BeginInvoke(() => _overlay.ShowNotification(senderName, message));
+                try { _overlay.BeginInvoke(() => _overlay.ShowNotification(senderName, message)); }
+                catch (ObjectDisposedException) { }
+                catch (InvalidOperationException) { }
                 return;
             }
             _overlay.ShowNotification(senderName, message);
@@ -381,12 +403,12 @@ public class AppContext : ApplicationContext
         try
         {
             if (_currentSession != null)
-                _currentSession.MediaPropertiesChanged -= OnMediaPropertiesChanged;
+                UnhookSession(_currentSession);
 
             _currentSession = sender.GetCurrentSession();
             if (_currentSession != null)
             {
-                _currentSession.MediaPropertiesChanged += OnMediaPropertiesChanged;
+                HookSession(_currentSession);
                 await UpdateFromSession(_currentSession);
             }
             else
@@ -399,7 +421,14 @@ public class AppContext : ApplicationContext
 
     private async void OnMediaPropertiesChanged(GlobalSystemMediaTransportControlsSession sender, MediaPropertiesChangedEventArgs args)
     {
-        try { await UpdateFromSession(sender); } catch (Exception ex) { Log($"OnMediaPropertiesChanged: {ex.Message}"); }
+        var mySeq = Interlocked.Increment(ref _mediaUpdateSeq);
+        try
+        {
+            await Task.Delay(100);
+            if (mySeq != Interlocked.Read(ref _mediaUpdateSeq)) return;
+            await UpdateFromSession(sender);
+        }
+        catch (Exception ex) { Log($"OnMediaPropertiesChanged: {ex.Message}"); }
     }
 
     private async Task UpdateFromSession(GlobalSystemMediaTransportControlsSession session)
@@ -413,6 +442,25 @@ public class AppContext : ApplicationContext
                 ? $"{title} — {artist}"
                 : title ?? "";
             UITitle(display);
+
+            Bitmap? art = null;
+            try
+            {
+                var thumb = props?.Thumbnail;
+                if (thumb != null)
+                {
+                    using var stream = await thumb.OpenReadAsync();
+                    using var ms = new MemoryStream();
+                    using (var s = stream.AsStreamForRead())
+                        await s.CopyToAsync(ms);
+                    ms.Position = 0;
+                    var raw = new Bitmap(ms);
+                    art = new Bitmap(raw, _overlay.AlbumArtSize, _overlay.AlbumArtSize);
+                    raw.Dispose();
+                }
+            }
+            catch (Exception ex) { Log($"UpdateFromSession: thumbnail failed: {ex.GetType().Name}: {ex.Message}"); art = null; }
+            UIAlbumArt(art);
         }
         catch (Exception ex) { Log($"UpdateFromSession: {ex.Message}"); }
     }
@@ -422,10 +470,25 @@ public class AppContext : ApplicationContext
         if (_overlay.IsDisposed) return;
         if (_overlay.InvokeRequired)
         {
-            _overlay.BeginInvoke(() => UITitle(title));
+            try { _overlay.BeginInvoke(() => UITitle(title)); }
+            catch (ObjectDisposedException) { }
+            catch (InvalidOperationException) { }
             return;
         }
         _overlay.SetTitle(title);
+    }
+
+    private void UIAlbumArt(Bitmap? art)
+    {
+        if (_overlay.IsDisposed) return;
+        if (_overlay.InvokeRequired)
+        {
+            try { _overlay.BeginInvoke(() => UIAlbumArt(art)); }
+            catch (ObjectDisposedException) { art?.Dispose(); }
+            catch (InvalidOperationException) { art?.Dispose(); }
+            return;
+        }
+        _overlay.SetAlbumArt(art);
     }
 
     private void OpenSettings()
@@ -490,26 +553,30 @@ public class AppContext : ApplicationContext
                 var oldManager = _mediaManager;
                 var dispatcher = _mediaDispatcher;
 
-                dispatcher.DispatcherQueue.TryEnqueue(async () =>
+                try
                 {
-                    try
+                    dispatcher.DispatcherQueue.TryEnqueue(async () =>
                     {
-                        if (oldSession != null)
-                            oldSession.MediaPropertiesChanged -= OnMediaPropertiesChanged;
-                        if (oldManager != null)
+                        try
                         {
-                            oldManager.SessionsChanged -= OnSessionsChanged;
-                            oldManager.CurrentSessionChanged -= OnCurrentSessionChanged;
+                            if (oldSession != null)
+                                UnhookSession(oldSession);
+                            if (oldManager != null)
+                            {
+                                oldManager.SessionsChanged -= OnSessionsChanged;
+                                oldManager.CurrentSessionChanged -= OnCurrentSessionChanged;
+                            }
                         }
-                    }
-                    catch (Exception ex) { Log($"Dispose: unsub failed: {ex.Message}"); }
+                        catch (Exception ex) { Log($"Dispose: unsub failed: {ex.Message}"); }
 
-                    try
-                    {
-                        await dispatcher.ShutdownQueueAsync();
-                    }
-                    catch (Exception ex) { Log($"Dispose: shutdown failed: {ex.Message}"); }
-                });
+                        try
+                        {
+                            await dispatcher.ShutdownQueueAsync();
+                        }
+                        catch (Exception ex) { Log($"Dispose: shutdown failed: {ex.Message}"); }
+                    });
+                }
+                catch (Exception ex) { Log($"Dispose: TryEnqueue failed: {ex.Message}"); }
             }
 
             _config.NotificationsEnabled = _notificationsEnabled;

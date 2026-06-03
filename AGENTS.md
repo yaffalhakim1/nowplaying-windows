@@ -58,8 +58,8 @@ NotifOut --> Media : t >= 250ms
 1. `DispatcherQueueController.CreateOnDedicatedThread()` → required by WinRT
 2. `GlobalSystemMediaTransportControlsSessionManager.RequestAsync()` → singleton session manager
 3. `CurrentSessionChanged` → attach to active session's `MediaPropertiesChanged`
-4. `TryGetMediaPropertiesAsync()` → read `Title` + `Artist`
-5. Display: `"♫  Title — Artist"` on taskbar
+4. `TryGetMediaPropertiesAsync()` → read `Title` + `Artist` + `Thumbnail`
+5. Display: `"♫  Title — Artist"` on taskbar (with album art if available)
 
 ## Notification Pipeline
 
@@ -97,6 +97,7 @@ Add-AppxPackage -Path NowOnTaskbar.msix -ExternalLocation <app-dir>
 - `TextRenderer.DrawText` with `ClearTypeGridFit` → smooth, matches taskbar clock
 - `Segoe UI 9pt` — same as Windows taskbar clock
 - **Media text**: `"♫  Title — Artist"`, centered or scrolling
+- **Album art**: 20x20 thumbnail from `props.Thumbnail`, drawn left of text (static, no scroll)
 - **Notification text**: `"✉  Sender: Message"`, blue tint (`Color.FromArgb(255, 180, 220, 255)`)
 - Long titles scroll horizontally (50ms timer, 2px/tick), **paused during notification animation**
 
@@ -173,6 +174,10 @@ dotnet publish -c Release -o publish-single /p:PublishSingleFile=true --no-self-
 - **UserNotificationListener** — requires package identity (sparse MSIX), not available to unpackaged apps
 - **Self-signed cert trust** — must be installed to Machine\TrustedPeople (admin required, one-time)
 - **System.Threading.Timer** for animation — safe via `BeginInvoke`, avoid touching UI state from callback
+- **Timer tick handlers must have try/catch** — unprotected handlers crash the app silently (no log, no error)
+- **BeginInvoke can throw ObjectDisposedException** — form may be disposed between `IsDisposed` check and the call
+- **MediaPropertiesChanged fires rapidly** — throttle to 100ms to avoid flooding the UI thread
+- **_currentSession can be null on race** — take local copy before use in cross-thread contexts
 
 ## COM Broker Health & Recovery
 
@@ -218,6 +223,10 @@ Every commit must pass these checks:
 - [ ] COM broker failure paths covered (health check recovers within 2min)
 - [ ] Cross-thread calls use `BeginInvoke` or `Invoke`
 - [ ] Reinit guards prevent cascading restarts
+- [ ] All timer tick handlers wrapped in try/catch with Log()
+- [ ] All BeginInvoke calls protected against ObjectDisposedException
+- [ ] MediaPropertiesChanged throttled to 100ms
+- [ ] _currentSession access uses local copy (no race condition)
 
 ### Cleanliness
 - [ ] No dead code, no commented-out blocks
