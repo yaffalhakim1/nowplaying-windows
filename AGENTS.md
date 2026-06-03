@@ -96,7 +96,7 @@ Add-AppxPackage -Path NowOnTaskbar.msix -ExternalLocation <app-dir>
 - `TransparencyKey = Color.Black` + `BackColor = Color.Black` → background invisible
 - `TextRenderer.DrawText` with `ClearTypeGridFit` → smooth, matches taskbar clock
 - `Segoe UI 9pt` — same as Windows taskbar clock
-- **Media text**: `"♫  Title — Artist"`, centered or scrolling
+- **Media text**: `"▶  Title — Artist"` when playing, `"⏸  Title — Artist"` when paused, `"♫"` idle
 - **Album art**: 20x20 thumbnail from `props.Thumbnail`, drawn left of text (static, no scroll)
 - **Notification text**: `"✉  Sender: Message"`, blue tint (`Color.FromArgb(255, 180, 220, 255)`)
 - Long titles scroll horizontally (50ms timer, 2px/tick), **paused during notification animation**

@@ -42,13 +42,21 @@ public class AppContext : ApplicationContext
 
     private void HookSession(GlobalSystemMediaTransportControlsSession session)
     {
-        try { session.MediaPropertiesChanged += OnMediaPropertiesChanged; }
+        try
+        {
+            session.MediaPropertiesChanged += OnMediaPropertiesChanged;
+            session.PlaybackInfoChanged += OnPlaybackInfoChanged;
+        }
         catch (Exception ex) { Log($"HookSession: {ex.Message}"); }
     }
 
     private void UnhookSession(GlobalSystemMediaTransportControlsSession session)
     {
-        try { session.MediaPropertiesChanged -= OnMediaPropertiesChanged; }
+        try
+        {
+            session.MediaPropertiesChanged -= OnMediaPropertiesChanged;
+            session.PlaybackInfoChanged -= OnPlaybackInfoChanged;
+        }
         catch (Exception ex) { Log($"UnhookSession: {ex.Message}"); }
     }
     private readonly string _logPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "NowOnTaskbar", "log.txt");
@@ -431,6 +439,17 @@ public class AppContext : ApplicationContext
         catch (Exception ex) { Log($"OnMediaPropertiesChanged: {ex.Message}"); }
     }
 
+    private void OnPlaybackInfoChanged(GlobalSystemMediaTransportControlsSession sender, PlaybackInfoChangedEventArgs args)
+    {
+        try
+        {
+            var info = sender.GetPlaybackInfo();
+            var isPlaying = info?.PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing;
+            UIPlaybackState(isPlaying);
+        }
+        catch (Exception ex) { Log($"OnPlaybackInfoChanged: {ex.Message}"); }
+    }
+
     private async Task UpdateFromSession(GlobalSystemMediaTransportControlsSession session)
     {
         try
@@ -461,6 +480,14 @@ public class AppContext : ApplicationContext
             }
             catch (Exception ex) { Log($"UpdateFromSession: thumbnail failed: {ex.GetType().Name}: {ex.Message}"); art = null; }
             UIAlbumArt(art);
+
+            try
+            {
+                var info = session.GetPlaybackInfo();
+                var isPlaying = info?.PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing;
+                UIPlaybackState(isPlaying);
+            }
+            catch (Exception ex) { Log($"UpdateFromSession: playback info failed: {ex.Message}"); }
         }
         catch (Exception ex) { Log($"UpdateFromSession: {ex.Message}"); }
     }
@@ -489,6 +516,19 @@ public class AppContext : ApplicationContext
             return;
         }
         _overlay.SetAlbumArt(art);
+    }
+
+    private void UIPlaybackState(bool isPlaying)
+    {
+        if (_overlay.IsDisposed) return;
+        if (_overlay.InvokeRequired)
+        {
+            try { _overlay.BeginInvoke(() => UIPlaybackState(isPlaying)); }
+            catch (ObjectDisposedException) { }
+            catch (InvalidOperationException) { }
+            return;
+        }
+        _overlay.SetPlaybackState(isPlaying);
     }
 
     private void OpenSettings()

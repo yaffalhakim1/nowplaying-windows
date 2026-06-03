@@ -49,6 +49,7 @@ public class TaskbarOverlayForm : Form
     private Bitmap? _albumArt;
     private const int _albumArtSize = 20;
     private const int _albumArtGap = 6;
+    private bool _isPlaying;
 
     public int AlbumArtSize => _albumArtSize;
 
@@ -320,7 +321,8 @@ public class TaskbarOverlayForm : Form
         try
         {
             using var g = CreateGraphics();
-            _textWidth = TextRenderer.MeasureText(g, $"♫  {title}", _font).Width;
+            var icon = _isPlaying ? "▶" : "⏸";
+            _textWidth = TextRenderer.MeasureText(g, $"{icon}  {title}", _font).Width;
         }
         catch
         {
@@ -351,6 +353,13 @@ public class TaskbarOverlayForm : Form
         else Invalidate();
     }
 
+    public void SetPlaybackState(bool isPlaying)
+    {
+        if (IsDisposed) return;
+        _isPlaying = isPlaying;
+        if (!_idle) Invalidate();
+    }
+
     public void ApplyConfig(OverlayConfig config)
     {
         _font.Dispose();
@@ -364,7 +373,8 @@ public class TaskbarOverlayForm : Form
         if (!_idle)
         {
             int artOffset = _albumArt != null ? _albumArtSize + _albumArtGap : 0;
-            var display = _albumArt != null ? _title : $"♫  {_title}";
+            var icon = _isPlaying ? "▶" : "⏸";
+            var display = _albumArt != null ? _title : $"{icon}  {_title}";
 
             try
             {
@@ -572,7 +582,9 @@ public class TaskbarOverlayForm : Form
             artOffset = _albumArtSize + _albumArtGap;
         }
 
-        var display = _albumArt != null ? _title : $"♫  {_title}";
+        var icon = _isPlaying ? "▶" : "⏸";
+        var display = _albumArt != null ? _title : $"{icon}  {_title}";
+
         if (_textWidth <= Width - artOffset)
         {
             var rect = new Rectangle(artOffset, yOffset, Width - artOffset, Height);
