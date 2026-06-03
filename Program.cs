@@ -44,6 +44,7 @@ public class AppContext : ApplicationContext
     private ToolStripMenuItem _prevMenuItem = default!;
     private ToolStripMenuItem _nextMenuItem = default!;
     private ToolStripMenuItem _albumArtMenuItem = default!;
+    private ToolStripMenuItem _layoutMenuItem = default!;
 
     private void HookSession(GlobalSystemMediaTransportControlsSession session)
     {
@@ -111,6 +112,9 @@ public class AppContext : ApplicationContext
         _albumArtMenuItem = new ToolStripMenuItem("Album Art") { Checked = _config.ShowAlbumArt };
         _albumArtMenuItem.Click += (_, _) => ToggleAlbumArt();
         _trayIcon.ContextMenuStrip.Items.Add(_albumArtMenuItem);
+        _layoutMenuItem = new ToolStripMenuItem("Two-line Layout") { Checked = _config.TwoLineLayout };
+        _layoutMenuItem.Click += (_, _) => ToggleLayout();
+        _trayIcon.ContextMenuStrip.Items.Add(_layoutMenuItem);
         _trayIcon.ContextMenuStrip.Items.Add(new ToolStripSeparator());
         _trayIcon.ContextMenuStrip.Items.Add("Exit", null, (_, _) =>
         {
@@ -365,7 +369,7 @@ public class AppContext : ApplicationContext
         {
             var session = sender.GetCurrentSession();
             if (session == null)
-                UITitle("");
+                UITitle("", "");
         }
         catch (Exception ex) { Log($"OnSessionsChanged: {ex.Message}"); }
     }
@@ -439,7 +443,7 @@ public class AppContext : ApplicationContext
             }
             else
             {
-                UITitle("");
+                UITitle("", "");
             }
         }
         catch (Exception ex) { Log($"OnCurrentSessionChanged: {ex.Message}"); }
@@ -473,12 +477,9 @@ public class AppContext : ApplicationContext
         try
         {
             var props = await session.TryGetMediaPropertiesAsync();
-            var title = props?.Title?.Trim();
-            var artist = props?.Artist?.Trim();
-            var display = !string.IsNullOrEmpty(title) && !string.IsNullOrEmpty(artist)
-                ? $"{title} — {artist}"
-                : title ?? "";
-            UITitle(display);
+            var title = props?.Title?.Trim() ?? "";
+            var artist = props?.Artist?.Trim() ?? "";
+            UITitle(title, artist);
 
             Bitmap? art = null;
             try
@@ -510,17 +511,17 @@ public class AppContext : ApplicationContext
         catch (Exception ex) { Log($"UpdateFromSession: {ex.Message}"); }
     }
 
-    private void UITitle(string title)
+    private void UITitle(string title, string artist = "")
     {
         if (_overlay.IsDisposed) return;
         if (_overlay.InvokeRequired)
         {
-            try { _overlay.BeginInvoke(() => UITitle(title)); }
+            try { _overlay.BeginInvoke(() => UITitle(title, artist)); }
             catch (ObjectDisposedException) { }
             catch (InvalidOperationException) { }
             return;
         }
-        _overlay.SetTitle(title);
+        _overlay.SetTitle(title, artist);
     }
 
     private void UIAlbumArt(Bitmap? art)
@@ -623,6 +624,17 @@ public class AppContext : ApplicationContext
         _overlay.ApplyConfig(_config);
         _trayIcon.ShowBalloonTip(1500, "Now On Taskbar",
             _config.ShowAlbumArt ? "Album art shown" : "Album art hidden",
+            ToolTipIcon.Info);
+    }
+
+    private void ToggleLayout()
+    {
+        _config.TwoLineLayout = !_config.TwoLineLayout;
+        _layoutMenuItem.Checked = _config.TwoLineLayout;
+        _config.Save();
+        _overlay.ApplyConfig(_config);
+        _trayIcon.ShowBalloonTip(1500, "Now On Taskbar",
+            _config.TwoLineLayout ? "Two-line layout" : "Single-line layout",
             ToolTipIcon.Info);
     }
 

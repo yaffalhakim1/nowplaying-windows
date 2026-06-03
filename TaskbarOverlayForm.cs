@@ -6,6 +6,7 @@ namespace NowOnTaskbar;
 public class TaskbarOverlayForm : Form
 {
     private string _title = "";
+    private string _artist = "";
     private int _scrollOffset;
     private int _textWidth;
     private bool _idle => string.IsNullOrEmpty(_title);
@@ -51,6 +52,7 @@ public class TaskbarOverlayForm : Form
     private const int _albumArtGap = 6;
     private bool _isPlaying;
     private bool _showAlbumArt = true;
+    private bool _twoLineLayout;
 
     public int AlbumArtSize => _albumArtSize;
 
@@ -304,10 +306,11 @@ public class TaskbarOverlayForm : Form
         return width < 30 || width > 500;
     }
 
-    public void SetTitle(string title)
+    public void SetTitle(string title, string artist = "")
     {
         if (IsDisposed) return;
         _title = title;
+        _artist = artist;
 
         if (_idle)
         {
@@ -322,13 +325,21 @@ public class TaskbarOverlayForm : Form
         try
         {
             using var g = CreateGraphics();
-            var icon = _isPlaying ? "▶" : "⏸";
-            var measureText = (_showAlbumArt && _albumArt != null) ? title : $"{icon}  {title}";
-            _textWidth = TextRenderer.MeasureText(g, measureText, _font).Width;
+            if (_twoLineLayout)
+            {
+                var w1 = TextRenderer.MeasureText(g, $"{(_isPlaying ? "▶" : "⏸")}  {artist}", _font).Width;
+                var w2 = TextRenderer.MeasureText(g, $"{(_isPlaying ? "▶" : "⏸")}  {title}", _font).Width;
+                _textWidth = Math.Max(w1, w2);
+            }
+            else
+            {
+                var display = string.IsNullOrEmpty(artist) ? title : $"{artist} — {title}";
+                _textWidth = TextRenderer.MeasureText(g, $"♫  {display}", _font).Width;
+            }
         }
         catch
         {
-            _textWidth = title.Length * 12;
+            _textWidth = (title.Length + artist.Length) * 12;
         }
 
         if (_textWidth > Width - 10 - artOffset)
@@ -351,7 +362,7 @@ public class TaskbarOverlayForm : Form
         if (IsDisposed) return;
         _albumArt?.Dispose();
         _albumArt = bitmap;
-        if (!_idle) SetTitle(_title);
+        if (!_idle) SetTitle(_title, _artist);
         else Invalidate();
     }
 
@@ -359,7 +370,7 @@ public class TaskbarOverlayForm : Form
     {
         if (IsDisposed) return;
         _isPlaying = isPlaying;
-        if (!_idle) Invalidate();
+        if (!_idle) SetTitle(_title, _artist);
     }
 
     public void ApplyConfig(OverlayConfig config)
@@ -372,31 +383,10 @@ public class TaskbarOverlayForm : Form
         _bgColor = Color.FromArgb(config.BackgroundAlpha, Color.FromArgb(config.BackgroundColorArgb));
         TransparencyKey = Color.FromArgb(config.TransparencyKeyArgb);
         _showAlbumArt = config.ShowAlbumArt;
+        _twoLineLayout = config.TwoLineLayout;
 
         if (!_idle)
-        {
-            int artOffset = (_showAlbumArt && _albumArt != null) ? _albumArtSize + _albumArtGap : 0;
-            var icon = _isPlaying ? "▶" : "⏸";
-            var display = (_showAlbumArt && _albumArt != null) ? _title : $"{icon}  {_title}";
-
-            try
-            {
-                using var g = CreateGraphics();
-                _textWidth = TextRenderer.MeasureText(g, display, _font).Width;
-            }
-            catch { _textWidth = _title.Length * 12; }
-
-            if (_textWidth > Width - 10 - artOffset)
-            {
-                _scrollOffset = Width - artOffset;
-                _scrollTimer.Start();
-            }
-            else
-            {
-                _scrollOffset = 0;
-                _scrollTimer.Stop();
-            }
-        }
+            SetTitle(_title, _artist);
         Reposition();
         Invalidate();
     }
@@ -585,21 +575,49 @@ public class TaskbarOverlayForm : Form
             artOffset = _albumArtSize + _albumArtGap;
         }
 
-        var icon = _isPlaying ? "▶" : "⏸";
-        var display = (_showAlbumArt && _albumArt != null) ? _title : $"{icon}  {_title}";
-
-        if (_textWidth <= Width - artOffset)
+        if (_twoLineLayout)
         {
-            var rect = new Rectangle(artOffset, yOffset, Width - artOffset, Height);
-            var hasArt = _showAlbumArt && _albumArt != null;
-            var align = hasArt
-                ? TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix
-                : TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix;
-            TextRenderer.DrawText(g, display, _font, rect, _mediaTextColor, Color.Transparent, align);
+            var icon = _isPlaying ? "▶" : "⏸";
+            var line1 = string.IsNullOrEmpty(_artist) ? "" : $"{icon}  {_artist}";
+            var line2 = string.IsNullOrEmpty(_title) ? "" : $"{icon}  {_title}";
+
+            if (_textWidth <= Width - artOffset)
+            {
+                var rect1 = new Rectangle(artOffset, yOffset, Width - artOffset, Height / 2);
+                var rect2 = new Rectangle(artOffset, yOffset + Height / 2, Width - artOffset, Height / 2);
+                TextRenderer.DrawText(g, line1, _font, rect1, _mediaTextColor, Color.Transparent,
+                    TextFormatFlags.HorizontalCenter | TextFormatFlags.Bottom | TextFormatFlags.NoPrefix);
+                TextRenderer.DrawText(g, line2, _font, rect2, _mediaTextColor, Color.Transparent,
+                    TextFormatFlags.HorizontalCenter | TextFormatFlags.Top | TextFormatFlags.NoPrefix);
+            }
+            else
+            {
+                DrawScrollingTextAt(g, line1, yOffset, artOffset);
+                DrawScrollingTextAt(g, line2, yOffset + Height / 2, artOffset);
+            }
         }
         else
         {
-            DrawScrollingTextAt(g, display, yOffset, artOffset);
+            var display = string.IsNullOrEmpty(_artist) ? _title : $"{_artist} — {_title}";
+            if (_showAlbumArt && _albumArt != null)
+            {
+                // album art replaces icon
+            }
+            else
+            {
+                display = $"♫  {display}";
+            }
+
+            if (_textWidth <= Width - artOffset)
+            {
+                var rect = new Rectangle(artOffset, yOffset, Width - artOffset, Height);
+                TextRenderer.DrawText(g, display, _font, rect, _mediaTextColor, Color.Transparent,
+                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
+            }
+            else
+            {
+                DrawScrollingTextAt(g, display, yOffset, artOffset);
+            }
         }
     }
 
