@@ -207,6 +207,7 @@ public class TaskbarOverlayForm : Form
         int yCenter = tr.top + (tr.H - _barHeight) / 2;
 
         Location = new Point(tr.left + x, yCenter);
+        Log($"Reposition: x={x}, y={yCenter}, w={Width}, taskbar=({tr.left},{tr.top},{tr.W},{tr.H})");
         SetWindowPos(Handle, IntPtr.Zero, 0, 0, 0, 0, SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE);
     }
 
@@ -310,6 +311,7 @@ public class TaskbarOverlayForm : Form
     public void SetTitle(string title, string artist = "")
     {
         if (IsDisposed) return;
+        Log($"SetTitle: title='{title}', artist='{artist}'");
         _title = title;
         _artist = artist;
 
@@ -371,6 +373,21 @@ public class TaskbarOverlayForm : Form
         if (IsDisposed) return;
         _albumArt?.Dispose();
         _albumArt = bitmap;
+        if (_albumArt == null && _showAlbumArt)
+        {
+            try
+            {
+                var fb = new Bitmap(_albumArtSize, _albumArtSize);
+                using var g = Graphics.FromImage(fb);
+                g.Clear(Color.Black);
+                g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+                TextRenderer.DrawText(g, "♫", _font, new Rectangle(0, 0, _albumArtSize, _albumArtSize),
+                    Color.FromArgb(120, 255, 255, 255), Color.Transparent,
+                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+                _albumArt = fb;
+            }
+            catch { }
+        }
         if (!_idle) SetTitle(_title, _artist);
         else Invalidate();
     }
@@ -404,6 +421,7 @@ public class TaskbarOverlayForm : Form
     public void ShowNotification(string sender, string message)
     {
         if (IsDisposed) return;
+        Log($"ShowNotification: sender='{sender}', message='{message}'");
 
         if (_notifState != NotifState.Media)
         {

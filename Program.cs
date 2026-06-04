@@ -436,6 +436,7 @@ public class AppContext : ApplicationContext
     {
         try
         {
+            Log("OnCurrentSessionChanged: enter");
             if (_currentSession != null)
                 UnhookSession(_currentSession);
 
@@ -459,7 +460,11 @@ public class AppContext : ApplicationContext
         try
         {
             await Task.Delay(100);
-            if (mySeq != Interlocked.Read(ref _mediaUpdateSeq)) return;
+            if (mySeq != Interlocked.Read(ref _mediaUpdateSeq))
+            {
+                Log($"OnMediaPropertiesChanged: cancelled (seq {mySeq} != {Interlocked.Read(ref _mediaUpdateSeq)})");
+                return;
+            }
             await UpdateFromSession(sender);
         }
         catch (Exception ex) { Log($"OnMediaPropertiesChanged: {ex.Message}"); }
@@ -471,7 +476,9 @@ public class AppContext : ApplicationContext
         {
             var info = sender.GetPlaybackInfo();
             var isPlaying = info?.PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing;
-            UIPlaybackState(isPlaying);
+            var prevEnabled = info?.Controls?.IsPreviousEnabled ?? true;
+            var nextEnabled = info?.Controls?.IsNextEnabled ?? true;
+            UIPlaybackState(isPlaying, prevEnabled, nextEnabled);
         }
         catch (Exception ex) { Log($"OnPlaybackInfoChanged: {ex.Message}"); }
     }
@@ -508,7 +515,9 @@ public class AppContext : ApplicationContext
             {
                 var info = session.GetPlaybackInfo();
                 var isPlaying = info?.PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing;
-                UIPlaybackState(isPlaying);
+                var prevEnabled = info?.Controls?.IsPreviousEnabled ?? true;
+                var nextEnabled = info?.Controls?.IsNextEnabled ?? true;
+                UIPlaybackState(isPlaying, prevEnabled, nextEnabled);
             }
             catch (Exception ex) { Log($"UpdateFromSession: playback info failed: {ex.Message}"); }
         }
@@ -541,25 +550,25 @@ public class AppContext : ApplicationContext
         _overlay.SetAlbumArt(art);
     }
 
-    private void UIPlaybackState(bool isPlaying)
+    private void UIPlaybackState(bool isPlaying, bool prevEnabled = true, bool nextEnabled = true)
     {
         if (_overlay.IsDisposed) return;
         if (_overlay.InvokeRequired)
         {
-            try { _overlay.BeginInvoke(() => UIPlaybackState(isPlaying)); }
+            try { _overlay.BeginInvoke(() => UIPlaybackState(isPlaying, prevEnabled, nextEnabled)); }
             catch (ObjectDisposedException) { }
             catch (InvalidOperationException) { }
             return;
         }
         _overlay.SetPlaybackState(isPlaying);
-        UpdatePlayPauseMenuItem(isPlaying);
+        UpdatePlayPauseMenuItem(isPlaying, prevEnabled, nextEnabled);
     }
 
-    private void UpdatePlayPauseMenuItem(bool isPlaying)
+    private void UpdatePlayPauseMenuItem(bool isPlaying, bool prevEnabled = true, bool nextEnabled = true)
     {
         if (_trayIcon.ContextMenuStrip?.InvokeRequired == true)
         {
-            try { _trayIcon.ContextMenuStrip.BeginInvoke(() => UpdatePlayPauseMenuItem(isPlaying)); }
+            try { _trayIcon.ContextMenuStrip.BeginInvoke(() => UpdatePlayPauseMenuItem(isPlaying, prevEnabled, nextEnabled)); }
             catch (ObjectDisposedException) { }
             catch (InvalidOperationException) { }
             return;
@@ -568,8 +577,8 @@ public class AppContext : ApplicationContext
         var session = _currentSession;
         _playPauseMenuItem.Text = isPlaying ? "⏸ Pause" : "▶ Play";
         _playPauseMenuItem.Enabled = session != null;
-        _prevMenuItem.Enabled = session != null;
-        _nextMenuItem.Enabled = session != null;
+        _prevMenuItem.Enabled = session != null && prevEnabled;
+        _nextMenuItem.Enabled = session != null && nextEnabled;
     }
 
     private void TryPlayPause()
@@ -578,12 +587,7 @@ public class AppContext : ApplicationContext
         {
             var session = _currentSession;
             if (session == null) return;
-            var info = session.GetPlaybackInfo();
-            var playing = info?.PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing;
-            if (playing)
-                session.TryPauseAsync().AsTask().ContinueWith(t => Log($"TryPause failed: {t.Exception?.Message}"), TaskContinuationOptions.OnlyOnFaulted);
-            else
-                session.TryPlayAsync().AsTask().ContinueWith(t => Log($"TryPlay failed: {t.Exception?.Message}"), TaskContinuationOptions.OnlyOnFaulted);
+            session.TryTogglePlayPauseAsync().AsTask().ContinueWith(t => Log($"TryTogglePlayPause failed: {t.Exception?.Message}"), TaskContinuationOptions.OnlyOnFaulted);
         }
         catch (Exception ex) { Log($"TryPlayPause: {ex.Message}"); }
     }
