@@ -132,7 +132,7 @@ public class TaskbarOverlayForm : Form
         _scrollTimer.Interval = _scrollIntervalMs;
         _scrollTimer.Tick += (_, _) => { try { _scrollOffset -= _scrollSpeed; Invalidate(); } catch (Exception ex) { Log($"ScrollTimer: {ex.Message}"); } };
 
-        _reposTimer.Interval = 1500;
+        _reposTimer.Interval = _zBumpIntervalMs;
         _reposTimer.Tick += (_, _) => { try { RepositionWithFullscreenCheck(); } catch (Exception ex) { Log($"ReposTimer: {ex.Message}"); } };
 
         _animThreadTimer = new System.Threading.Timer(AnimTimerCallback, null, Timeout.Infinite, Timeout.Infinite);
@@ -165,24 +165,8 @@ public class TaskbarOverlayForm : Form
     {
         base.OnHandleCreated(e);
         _taskbarHwnd = FindWindow("Shell_TrayWnd", null);
-        AttachToTaskbar();
         _reposTimer.Start();
         Reposition();
-    }
-
-    private void AttachToTaskbar()
-    {
-        if (_taskbarHwnd == IntPtr.Zero) return;
-        try
-        {
-            SetParent(Handle, _taskbarHwnd);
-            int style = GetWindowLong(Handle, GWL_STYLE);
-            style = (style & ~WS_POPUP) | WS_CHILD;
-            SetWindowLong(Handle, GWL_STYLE, style);
-            SetWindowPos(Handle, IntPtr.Zero, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE);
-            Log("AttachToTaskbar: attached as child of Shell_TrayWnd");
-        }
-        catch (Exception ex) { Log($"AttachToTaskbar: {ex.Message}"); }
     }
 
     private void RepositionWithFullscreenCheck()
@@ -251,6 +235,7 @@ public class TaskbarOverlayForm : Form
 
         Location = new Point(tr.left + x, yCenter);
         Log($"Reposition: x={x}, y={yCenter}, w={Width}, taskbar=({tr.left},{tr.top},{tr.W},{tr.H})");
+        SetWindowPos(Handle, IntPtr.Zero, 0, 0, 0, 0, SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE);
     }
 
     private int FindLeftOfTrayArea(RECT taskbarRect)
@@ -589,14 +574,13 @@ public class TaskbarOverlayForm : Form
     {
         if (m.Msg == WM_TASKBARCREATED_MSG)
         {
-            Log("WndProc: TaskbarCreated detected, re-attaching");
+            Log("WndProc: TaskbarCreated detected, re-positioning");
             _taskbarHwnd = FindWindow("Shell_TrayWnd", null);
-            AttachToTaskbar();
             Reposition();
             return;
         }
 
-        if (m.Msg == WM_GETOBJECT || m.Msg == WM_NCCALCSIZE || m.Msg == WM_WINDOWPOSCHANGING)
+        if (m.Msg == WM_GETOBJECT)
         {
             m.Result = IntPtr.Zero;
             return;
@@ -617,6 +601,14 @@ public class TaskbarOverlayForm : Form
         }
 
         base.WndProc(ref m);
+
+        if (m.Msg == WM_RBUTTONDOWN)
+        {
+            var result = MessageBox.Show("Exit Now On Taskbar?", "Now On Taskbar",
+                MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+            if (result == DialogResult.Yes)
+                Application.Exit();
+        }
     }
 
     protected override void OnPaint(PaintEventArgs e)
